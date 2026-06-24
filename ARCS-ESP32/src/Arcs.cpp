@@ -32,7 +32,7 @@ volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
 
 const float wheelDiameter = 44.0; // mm
-const long ticksPerRotation = 1; 
+const long ticksPerRotation = 7*298; 
 const float circumference = wheelDiameter * PI;
 
 void updateEncoderLeft() {
@@ -85,6 +85,8 @@ void setSpeed(int speedA, int speedB) {
   analogWrite(PWMBR, speedB);
 }
 
+
+/// MARK: Setup
 void setup() {
   // Set all control pins to outputs
 
@@ -119,6 +121,8 @@ void setup() {
   stopAllMotors();
 }
 
+
+/// MARK: Main Loop
 void loop() {
   // Move both motors forward at maximum speed (255)
   directionForward();
