@@ -1,16 +1,18 @@
 #include <Arduino.h>
 #include <PID.h>
+#include <Adafruit_VL6180X.h>
 
 //Gantry pins
 const int ENCODER_PIN_A1 = 0;
 const int ENCODER_PIN_B1 = 0;
 const int PWM_PIN1 = 0; 
 
-//Spray pins
-const int ENCODER_PIN_A2 = 0;
-const int ENCODER_PIN_B2 = 0;
-const int PWM_PIN2 = 0;
+const int STANDARD_DISTANCE = 0;
 
+int depth;
+
+//Spray pins
+const int PWM_PIN2 = 0;
 PID pidController = PID();
 
 const int kP = 0;
@@ -21,6 +23,8 @@ int motorPosition = 0;
 
 int targetPosition = 0;
 
+Adafruit_VL6180X ir = Adafruit_VL6180X();
+
 int encoderAValue;
 int encoderBValue;
 
@@ -29,13 +33,13 @@ void setup() {
   pinMode(PWM_PIN2, OUTPUT);
   pinMode(ENCODER_PIN_A1, INPUT_PULLUP);
   pinMode(ENCODER_PIN_B1, INPUT_PULLUP);
-  pinMode(ENCODER_PIN_A2, INPUT_PULLUP);
-  pinMode(ENCODER_PIN_B2, INPUT_PULLUP);
 
   Serial.begin(115200);
 
-  pidController.Init(kP, kI, kD); 
+  ir.begin();
+  depth = ir.readRange();
 
+  pidController.Init(kP, kI, kD); 
 }
 
 void loop() {
@@ -47,6 +51,8 @@ void loop() {
     } else if (encoderAValue == LOW && encoderBValue == HIGH) {
         motorPosition--;
     }
+
+    depth = ir.readRange();
 }
 
 void setMotorPosition(int targetPostion) {
@@ -62,5 +68,19 @@ bool isAtTargetPosition() {
 }
 
 void spray(){
+    if(isAtTargetPosition){
     analogWrite(PWM_PIN2, 255);
+    }
+}
+
+bool setDepth(int depthmm){
+    
+}
+
+bool isFilledLayer(){
+
+}
+
+bool isFilledFully(){
+    return abs(STANDARD_DISTANCE - depth) < 4;
 }
