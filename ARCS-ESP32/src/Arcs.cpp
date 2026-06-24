@@ -22,11 +22,11 @@ const int BR1 = 5;
 const int BR2 = 4;
 
 // Encoder Connections
-const int ENCAFL = 2; // Encoder A pin for Motor A
-const int ENCBFL = 3; // Encoder B pin for Motor A
+const int ENCAFL = 2; // Encoder A pin for Front Left Motor
+const int ENCBFL = 3; // Encoder B pin for Front Left Motor
 
-const int ENCAFR = 3; // Encoder A pin for Motor B
-const int ENCBFR = 4; // Encoder B pin for Motor B
+const int ENCAFR = 3; // Encoder A pin for Front Right Motor
+const int ENCBFR = 4; // Encoder B pin for Front Right Motor
 
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
@@ -55,6 +55,10 @@ void directionForward() {
   digitalWrite(FL2, LOW);
   digitalWrite(FR1, HIGH);
   digitalWrite(FR2, LOW);
+  digitalWrite(BL1, HIGH);
+  digitalWrite(BL2, LOW);
+  digitalWrite(BR1, HIGH);
+  digitalWrite(BR2, LOW);
 }
 
 // Function to run motors backward
@@ -63,6 +67,10 @@ void directionBackward() {
   digitalWrite(FL2, HIGH);
   digitalWrite(FR1, LOW);
   digitalWrite(FR2, HIGH);
+  digitalWrite(BL1, LOW);
+  digitalWrite(BL2, HIGH);
+  digitalWrite(BR1, LOW);
+  digitalWrite(BR2, HIGH);
 }
 
 // Function to stop both motors
