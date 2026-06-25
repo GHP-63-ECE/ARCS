@@ -1,12 +1,17 @@
 #include <Arduino.h>
 #include <drive.h>
-#include <HardwareSerial.h>
+#include "BluetoothSerial.h"
+
+BluetoothSerial SerialBT;
+
+//#include <HardwareSerial.h>
+
 
 //Raspberry Pi communication Pin Definitions
-#define RXD2 16  // GPIO16 as RX
-#define TXD2 17  // GPIO17 as TX
+//#define RXD2 16  // GPIO16 as RX
+//#define TXD2 17  // GPIO17 as TX
 
-HardwareSerial mySerial(2); // Use Serial2
+//HardwareSerial mySerial(2); // Use Serial2
 
 // Motor Pins
 // Front Left
@@ -53,9 +58,12 @@ void driveDistance(float distance, int speed) {
 /// MARK: Setup
 void setup() {
 
-  Serial.begin(115200);  // Initialize Serial Monitor for debugging
-  mySerial.begin(115200, SERIAL_8N1, RXD2, TXD2); // Initialize Serial2 with defined pins
-  mySerial.println("Wake up from the matrix!");
+  Serial.begin(115200);
+  SerialBT.begin("ARCS"); // Name your Bluetooth device
+  Serial.println("Bluetooth device is ready to pair!");
+   // Initialize Serial Monitor for debugging
+  //mySerial.begin(115200, SERIAL_8N1, RXD2, TXD2); // Initialize Serial2 with defined pins
+  //mySerial.println("Wake up from the matrix!");
 
   // Set all control pins to outputs
 
@@ -94,8 +102,8 @@ void setup() {
 /// MARK: Main Loop
 void loop() {
 
-    if (Serial.available() > 0) {
-    String dataFromPi = Serial.readStringUntil('\n');
+    if (SerialBT.available() > 0) {
+    String dataFromPi = SerialBT.readStringUntil('\n');
     if (dataFromPi.length() > 0) {
        switch(dataFromPi.charAt(0)) {
       case 'F':
@@ -118,7 +126,7 @@ void loop() {
         stopAllMotors();
         break;
       default:
-        mySerial.println("Unknown command received: " + dataFromPi);
+        SerialBT.println("Unknown command received: " + dataFromPi);
         break;
     }
     }
