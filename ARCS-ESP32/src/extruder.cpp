@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <PID.h>
 #include <Adafruit_VL6180X.h>
+#include "extruder.h"
 
 //Gantry pins
 const int ENCODER_PIN_A1 = 0;
