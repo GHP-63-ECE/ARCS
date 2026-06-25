@@ -1,4 +1,4 @@
-#include <Servo.h> // ONLY LIBRARY NECESARY FOR ESC 
+#include <ESP32Servo.h> // ONLY LIBRARY NECESARY FOR ESC 
 #include <Wire.h>
 #include <SPI.h>
 #include <Arduino.h>
