@@ -73,14 +73,6 @@ void spray(){
     }
 }
 
-bool setDepth(int depthmm){
-    
-}
-
-bool isFilledLayer(){
-
-}
-
 bool isFilledFully(){
     return abs(STANDARD_DISTANCE - depth) < 4;
 }
