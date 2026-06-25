@@ -1,6 +1,14 @@
 #include <Arduino.h>
-// Motor Pins
+#include <drive.h>
+#include <HardwareSerial.h>
 
+//Raspberry Pi communication Pin Definitions
+#define RXD2 16  // GPIO16 as RX
+#define TXD2 17  // GPIO17 as TX
+
+HardwareSerial mySerial(2); // Use Serial2
+
+// Motor Pins
 // Front Left
 const int PWMFL = 9;
 const int FL1 = 8;
@@ -35,59 +43,20 @@ const float wheelDiameter = 44.0; // mm
 const long ticksPerRotation = 7*298; 
 const float circumference = wheelDiameter * PI;
 
-void updateEncoderLeft() {
-  if (digitalRead(ENCAFL)> digitalRead(ENCBFL))
-    encoderValueLeft++;
-  else
-    encoderValueLeft--;
-}
 
-void updateEncoderRight() {
-  if (digitalRead(ENCAFR)> digitalRead(ENCBFR))
-    encoderValueRight++;
-  else
-    encoderValueRight--;
-}
 
-// Function to run motors forward
-void directionForward() {
-  digitalWrite(FL1, HIGH);
-  digitalWrite(FL2, LOW);
-  digitalWrite(FR1, HIGH);
-  digitalWrite(FR2, LOW);
-}
 
-// Function to run motors backward
-void directionBackward() {
-  digitalWrite(FL1, LOW);
-  digitalWrite(FL2, HIGH);
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, HIGH);
-}
+void driveDistance(float distance, int speed) {
 
-// Function to stop both motors
-void stopAllMotors() {
-  digitalWrite(FL1, LOW);
-  digitalWrite(FL2, LOW);
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, LOW);
-  digitalWrite(BL1, LOW);
-  digitalWrite(BL2, LOW);
-  digitalWrite(BR1, LOW);
-  digitalWrite(BR2, LOW);
 }
-
-// Function to set individual motor speeds (PWM values: 0 to 255)
-void setSpeed(int speedA, int speedB) {
-  analogWrite(PWMFL, speedA);
-  analogWrite(PWMFR, speedB);
-  analogWrite(PWMBL, speedB);
-  analogWrite(PWMBR, speedB);
-}
-
 
 /// MARK: Setup
 void setup() {
+
+  Serial.begin(115200);  // Initialize Serial Monitor for debugging
+  mySerial.begin(115200, SERIAL_8N1, RXD2, TXD2); // Initialize Serial2 with defined pins
+  mySerial.println("Wake up from the matrix!");
+
   // Set all control pins to outputs
 
   // Front Left
@@ -124,21 +93,35 @@ void setup() {
 
 /// MARK: Main Loop
 void loop() {
-  // Move both motors forward at maximum speed (255)
-  directionForward();
-  setSpeed(255, 255);
-  delay(2000);
-  
-  // Stop motors for 1 second
-  stopAllMotors();
-  delay(1000);
-  
-  // Move both motors backward at half speed (127)
-  directionBackward();
-  setSpeed(127, 127);
-  delay(2000);
-  
-  // Stop motors
-  stopAllMotors();
-  delay(1000);
+
+    if (Serial.available() > 0) {
+    String dataFromPi = Serial.readStringUntil('\n');
+    if (dataFromPi.length() > 0) {
+       switch(dataFromPi.charAt(0)) {
+      case 'F':
+        directionForward();
+        setSpeed(255, 255);
+        break;
+      case 'B':
+        directionBackward();
+        setSpeed(255, 255);
+        break;
+      case 'L':
+        directionForward();
+        setSpeed(255, 100); // Left turn: slower left motor
+        break;
+      case 'R':
+        directionForward();
+        setSpeed(100, 255); // Right turn: slower right motor
+        break;
+      case 'S':
+        stopAllMotors();
+        break;
+      default:
+        mySerial.println("Unknown command received: " + dataFromPi);
+        break;
+    }
+    }
+  }
+
 }
