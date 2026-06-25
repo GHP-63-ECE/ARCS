@@ -35,11 +35,11 @@ const int BR1 = 5;
 const int BR2 = 4;
 
 // Encoder Connections
-const int ENCAFL = 2; // Encoder A pin for Motor A
-const int ENCBFL = 3; // Encoder B pin for Motor A
+const int ENCAFL = 2; // Encoder A pin for Front Left Motor
+const int ENCBFL = 3; // Encoder B pin for Front Left Motor
 
-const int ENCAFR = 3; // Encoder A pin for Motor B
-const int ENCBFR = 4; // Encoder B pin for Motor B
+const int ENCAFR = 3; // Encoder A pin for Front Right Motor
+const int ENCBFR = 4; // Encoder B pin for Front Right Motor
 
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
