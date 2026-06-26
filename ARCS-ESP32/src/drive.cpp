@@ -161,8 +161,8 @@ void directionForward(){
 void directionBackward(){
   digitalWrite(FL1, LOW);
   digitalWrite(FL2, HIGH);
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, HIGH);
+  digitalWrite(BL1, LOW);
+  digitalWrite(BL2, HIGH);
 }
 
 void setSpeed(int speedA, int speedB){
