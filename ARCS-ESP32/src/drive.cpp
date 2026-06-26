@@ -56,7 +56,7 @@ const float wheelDiameter = 44.0; // mm
 const long ticksPerRotation = 7*298; 
 const float circumference = wheelDiameter * PI;
 
-
+const int movementSpeed = 128; // Speed for driving forward/backward (0-255)
 
 
 void setup() {
@@ -108,20 +108,16 @@ void loop() {
     if (dataFromPi.length() > 0) {
        switch(dataFromPi.charAt(0)) {
       case 'F':
-        directionForward();
-        setSpeed(255, 255);
+        setSpeed(movementSpeed, movementSpeed);
         break;
       case 'B':
-        directionBackward();
-        setSpeed(255, 255);
+        setSpeed(-movementSpeed, -movementSpeed);
         break;
       case 'L':
-        directionForward();
-        setSpeed(255, 100); // Left turn: slower left motor
+        setSpeed(movementSpeed, -movementSpeed); 
         break;
       case 'R':
-        directionForward();
-        setSpeed(100, 255); // Right turn: slower right motor
+        setSpeed(-movementSpeed, movementSpeed); 
         break;
       case 'S':
         stopAllMotors();
@@ -135,42 +131,84 @@ void loop() {
 
 }
 
-void driveDistance(float distance, int speed) {
-
-}
-
-
-void stopAllMotors(){
+void stopLeftMotors() {
   digitalWrite(FL1, LOW);
   digitalWrite(FL2, LOW);
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, LOW);
+  
   digitalWrite(BL1, LOW);
   digitalWrite(BL2, LOW);
+}
+
+void stopRightMotors() {
+  digitalWrite(FR1, LOW);
+  digitalWrite(FR2, LOW);
+
   digitalWrite(BR1, LOW);
   digitalWrite(BR2, LOW);
 }
 
-void directionForward(){
-  digitalWrite(FL1, HIGH);
-  digitalWrite(FL2, LOW);
-  digitalWrite(FR1, HIGH);
-  digitalWrite(FR2, LOW);
+void stopAllMotors() {
+  stopLeftMotors();
+  stopRightMotors();
 }
 
-void directionBackward(){
+void LeftMotorsForwards() {
+  digitalWrite(FL1, HIGH);
+  digitalWrite(FL2, LOW);
+
+  digitalWrite(BL1, HIGH);
+  digitalWrite(BL2, LOW);
+}
+
+void RightMotorsForwards() {
+  digitalWrite(FR1, HIGH);
+  digitalWrite(FR2, LOW);
+
+  digitalWrite(BR1, HIGH);
+  digitalWrite(BR2, LOW);
+}
+
+void LeftMotorsBackwards() {
   digitalWrite(FL1, LOW);
   digitalWrite(FL2, HIGH);
+
   digitalWrite(BL1, LOW);
   digitalWrite(BL2, HIGH);
 }
 
-void setSpeed(int speedA, int speedB){
-  analogWrite(PWMFL, speedA);
-  analogWrite(PWMFR, speedB);
-  analogWrite(PWMBL, speedA);
-  analogWrite(PWMBR, speedB);
+void RightMotorsBackwards() {
+  digitalWrite(FR1, LOW);
+  digitalWrite(FR2, HIGH);
+
+  digitalWrite(BR1, LOW);
+  digitalWrite(BR2, HIGH);
 }
+
+void setSpeed(int left, int right){
+  if (left == 0) {
+    stopRightMotors();
+  } else if (left < 0) {
+    LeftMotorsBackwards();
+    left = -left;
+  } else {
+    LeftMotorsForwards();
+  }
+
+  if (right == 0) {
+    stopRightMotors();
+  } else if (right < 0) {
+    RightMotorsBackwards();
+    right = -right;
+  } else {
+    RightMotorsForwards();
+  }
+  analogWrite(PWMFL, left);
+  analogWrite(PWMBL, left);
+
+  analogWrite(PWMFR, right);
+  analogWrite(PWMBR, right);
+}
+
 
 void updateEncoderLeft(){
     if (digitalRead(ENCAFL)> digitalRead(ENCBFL))
