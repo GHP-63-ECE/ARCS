@@ -56,8 +56,9 @@ void loop() {
     depth = ir.readRange();
 }
 
-void setMotorPosition(int targetPostion) {
-    int error = targetPostion - motorPosition;
+void setMotorPosition(int targetPos) {
+    int error = targetPos - motorPosition;
+    targetPosition = targetPos;
 
     pidController.UpdateError(error);
 

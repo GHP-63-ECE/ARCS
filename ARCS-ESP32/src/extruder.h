@@ -37,7 +37,7 @@ public:
 
     void spray();
 
-    bool isFullyFilled();
+    bool isFilledFully();
 };
 
 
