@@ -1,8 +1,4 @@
 #include <Arduino.h>
-#include <BluetoothSerial.h>
-#include "drive.h"
-
-BluetoothSerial SerialBT;
 
 //#include <HardwareSerial.h>
 
@@ -25,29 +21,29 @@ void driveDistance(float distance, int speed);
 // Front Left
 const int PWMFL = 23;
 const int FL1 = 22;
-const int FL2 = 1;
+const int FL2 = 21;
 
 // Front Right
-const int PWMFR = 18;
-const int FR1 = 5;
-const int FR2 = 17;
+const int PWMFR = 19;
+const int FR1 = 18;
+const int FR2 = 5;
 
 // Back Left
-const int PWMBL = 3;
-const int BL1 = 21;
-const int BL2 = 19;
+const int PWMBL = 4;
+const int BL1 = 2;
+const int BL2 = 15;
 
 // Back Right
-const int PWMBR = 16;
-const int BR1 = 4;
-const int BR2 = 2;
+const int PWMBR = 14;
+const int BR1 = 12;
+const int BR2 = 13;
 
 // Encoder Connections
-const int ENCAFL = 32; // Encoder A pin for Front Left Motor
-const int ENCBFL = 33; // Encoder B pin for Front Left Motor
+const int ENCAFL = 34; // Encoder A pin for Front Left Motor
+const int ENCBFL = 35; // Encoder B pin for Front Left Motor
 
-const int ENCAFR = 12; // Encoder A pin for Front Right Motor
-const int ENCBFR = 13; // Encoder B pin for Front Right Motor
+const int ENCAFR = 36; // Encoder A pin for Front Right Motor
+const int ENCBFR = 39; // Encoder B pin for Front Right Motor
 
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
@@ -62,8 +58,7 @@ const int movementSpeed = 128; // Speed for driving forward/backward (0-255)
 void setup() {
 
   Serial.begin(115200);
-  SerialBT.begin("ARCS"); // Name your Bluetooth device
-  Serial.println("Bluetooth device is ready to pair!");
+  Serial.print("Started:");
    // Initialize Serial Monitor for debugging
   //mySerial.begin(115200, SERIAL_8N1, RXD2, TXD2); // Initialize Serial2 with defined pins
   //mySerial.println("Wake up from the matrix!");
@@ -103,33 +98,37 @@ void setup() {
 
 void loop() {
 
-    if (SerialBT.available() > 0) {
-    String dataFromPi = SerialBT.readStringUntil('\n');
-    if (dataFromPi.length() > 0) {
-       switch(dataFromPi.charAt(0)) {
-      case 'F':
+    if (Serial.available() > 0) {
+    char dataFromPi = Serial.read();
+       switch(dataFromPi) {
+      case 'w':
         setSpeed(movementSpeed, movementSpeed);
+        Serial.print('w');
         break;
-      case 'B':
+      case 's':
         setSpeed(-movementSpeed, -movementSpeed);
+        Serial.print('s');
         break;
-      case 'L':
+      case 'a':
         setSpeed(movementSpeed, -movementSpeed); 
+        Serial.print('a');
         break;
-      case 'R':
+      case 'd':
         setSpeed(-movementSpeed, movementSpeed); 
+        Serial.print('d');
         break;
-      case 'S':
+      case ' ':
         stopAllMotors();
+        Serial.print("Stop");
         break;
       default:
-        SerialBT.println("Unknown command received: " + dataFromPi);
+        Serial.println("Unknown command received: " + dataFromPi);
         break;
     }
     }
   }
 
-}
+
 
 void stopLeftMotors() {
   digitalWrite(FL1, LOW);
