@@ -23,24 +23,24 @@ void driveDistance(float distance, int speed);
  
 // Motor Pins
 // Front Left
-const int PWMFL = 9;
-const int FL1 = 8;
-const int FL2 = 7;
+const int PWMFL = 23;
+const int FL1 = 22;
+const int FL2 = 1;
 
 // Front Right
-const int PWMFR = 3;
+const int PWMFR = 18;
 const int FR1 = 5;
-const int FR2 = 4;
+const int FR2 = 17;
 
 // Back Left
-const int PWMBL = 9;
-const int BL1 = 8;
-const int BL2 = 7;
+const int PWMBL = 3;
+const int BL1 = 21;
+const int BL2 = 19;
 
 // Back Right
-const int PWMBR = 3;
-const int BR1 = 5;
-const int BR2 = 4;
+const int PWMBR = 16;
+const int BR1 = 4;
+const int BR2 = 2;
 
 // Encoder Connections
 const int ENCAFL = 32; // Encoder A pin for Front Left Motor
