@@ -1,52 +1,56 @@
+#ifndef drive_h
 #include <Arduino.h>
+#define drive_h
+class drive{
+public:
+  int PWMFL;
+  int FL1;
+  int FL2;
 
-// Function to run motors forward
-void directionForward() {
-  digitalWrite(FL1, HIGH);
-  digitalWrite(FL2, LOW);
-  digitalWrite(FR1, HIGH);
-  digitalWrite(FR2, LOW);
-}
+  // Front Right
+  int PWMFR;
+  int FR1;
+  int FR2;
 
-// Function to run motors backward
-void directionBackward() {
-  digitalWrite(FL1, LOW);
-  digitalWrite(FL2, HIGH);
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, HIGH);
-}
+  // Back Left
+  int PWMBL;
+  int BL1;
+  int BL2;
 
-// Function to stop both motors
-void stopAllMotors() {
-  digitalWrite(FL1, LOW);
-  digitalWrite(FL2, LOW);
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, LOW);
-  digitalWrite(BL1, LOW);
-  digitalWrite(BL2, LOW);
-  digitalWrite(BR1, LOW);
-  digitalWrite(BR2, LOW);
-}
+  // Back Right
+  int PWMBR;
+  int BR1;
+  int BR2;
 
-// Function to set individual motor speeds (PWM values: 0 to 255)
-void setSpeed(int speedA, int speedB) {
-  analogWrite(PWMFL, speedA);
-  analogWrite(PWMFR, speedB);
-  analogWrite(PWMBL, speedA);
-  analogWrite(PWMBR, speedB);
-}
+  // Encoder Connections
+  int ENCAFL; // Encoder A pin for Front Left Motor
+  int ENCBFL; // Encoder B pin for Front Left Motor
 
-void updateEncoderLeft() {
-  if (digitalRead(ENCAFL)> digitalRead(ENCBFL))
-    encoderValueLeft++;
-  else
-    encoderValueLeft--;
-}
+  int ENCAFR; // Encoder A pin for Front Right Motor
+  int ENCBFR; // Encoder B pin for Front Right Motor
 
-void updateEncoderRight() {
-  if (digitalRead(ENCAFR)> digitalRead(ENCBFR))
-    encoderValueRight++;
-  else
-    encoderValueRight--;
-}
+  long encoderValueLeft;
+  long encoderValueRight;
 
+  float wheelDiameter; // mm
+  long ticksPerRotation; 
+  float circumference;
+
+
+  // Function to run motors forward
+  void directionForward();
+
+  // Function to run motors backward
+  void directionBackward();
+
+  // Function to stop both motors
+  void stopAllMotors();
+
+  // Function to set individual motor speeds (PWM values: 0 to 255)
+  void setSpeed(int speedA, int speedB);
+
+  void updateEncoderLeft();
+
+  void updateEncoderRight();
+};
+#endif

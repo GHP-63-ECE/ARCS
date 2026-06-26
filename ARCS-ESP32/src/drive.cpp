@@ -1,11 +1,19 @@
 #include <Arduino.h>
-#include <drive.h>
-#include "BluetoothSerial.h"
+#include <BluetoothSerial.h>
+#include "drive.h"
 
 BluetoothSerial SerialBT;
 
 //#include <HardwareSerial.h>
 
+// Function prototypes because c++ is 
+void stopAllMotors();
+void directionForward();
+void directionBackward();
+void setSpeed(int speedA, int speedB);
+void updateEncoderLeft();
+void updateEncoderRight();
+void driveDistance(float distance, int speed);
 
 //Raspberry Pi communication Pin Definitions
 //#define RXD2 16  // GPIO16 as RX
@@ -38,8 +46,8 @@ const int BR2 = 4;
 const int ENCAFL = 2; // Encoder A pin for Front Left Motor
 const int ENCBFL = 3; // Encoder B pin for Front Left Motor
 
-const int ENCAFR = 3; // Encoder A pin for Front Right Motor
-const int ENCBFR = 4; // Encoder B pin for Front Right Motor
+const int ENCAFR = 12; // Encoder A pin for Front Right Motor
+const int ENCBFR = 13; // Encoder B pin for Front Right Motor
 
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
@@ -51,11 +59,6 @@ const float circumference = wheelDiameter * PI;
 
 
 
-void driveDistance(float distance, int speed) {
-
-}
-
-/// MARK: Setup
 void setup() {
 
   Serial.begin(115200);
@@ -95,11 +98,9 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ENCBFR), updateEncoderRight, RISING);
   
   // Turn off motors initially
-  stopAllMotors();
+ stopAllMotors();
 }
 
-
-/// MARK: Main Loop
 void loop() {
 
     if (SerialBT.available() > 0) {
@@ -132,4 +133,55 @@ void loop() {
     }
   }
 
+}
+
+void driveDistance(float distance, int speed) {
+
+}
+
+
+void stopAllMotors(){
+  digitalWrite(FL1, LOW);
+  digitalWrite(FL2, LOW);
+  digitalWrite(FR1, LOW);
+  digitalWrite(FR2, LOW);
+  digitalWrite(BL1, LOW);
+  digitalWrite(BL2, LOW);
+  digitalWrite(BR1, LOW);
+  digitalWrite(BR2, LOW);
+}
+
+void directionForward(){
+  digitalWrite(FL1, HIGH);
+  digitalWrite(FL2, LOW);
+  digitalWrite(FR1, HIGH);
+  digitalWrite(FR2, LOW);
+}
+
+void directionBackward(){
+  digitalWrite(FL1, LOW);
+  digitalWrite(FL2, HIGH);
+  digitalWrite(FR1, LOW);
+  digitalWrite(FR2, HIGH);
+}
+
+void setSpeed(int speedA, int speedB){
+  analogWrite(PWMFL, speedA);
+  analogWrite(PWMFR, speedB);
+  analogWrite(PWMBL, speedA);
+  analogWrite(PWMBR, speedB);
+}
+
+void updateEncoderLeft(){
+    if (digitalRead(ENCAFL)> digitalRead(ENCBFL))
+    encoderValueLeft++;
+  else
+    encoderValueLeft--;
+}
+
+void updateEncoderRight(){
+   if (digitalRead(ENCAFR)> digitalRead(ENCBFR))
+    encoderValueRight++;
+  else
+    encoderValueRight--;
 }
