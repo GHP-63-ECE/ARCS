@@ -103,8 +103,8 @@ void setup() {
 
 void loop() {
 
-    if (SerialBT.available() > 0) {
-    String dataFromPi = SerialBT.readStringUntil('\n');
+    if (Serial.available() > 0) {
+    String dataFromPi = Serial.readStringUntil('\n');
     if (dataFromPi.length() > 0) {
        switch(dataFromPi.charAt(0)) {
       case 'W':
@@ -123,7 +123,7 @@ void loop() {
         stopAllMotors();
         break;
       default:
-        SerialBT.println("Unknown command received: " + dataFromPi);
+        Serial.println("Unknown command received: " + dataFromPi);
         break;
     }
     }
