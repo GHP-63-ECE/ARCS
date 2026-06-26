@@ -107,19 +107,19 @@ void loop() {
     String dataFromPi = SerialBT.readStringUntil('\n');
     if (dataFromPi.length() > 0) {
        switch(dataFromPi.charAt(0)) {
-      case 'F':
+      case 'W':
         setSpeed(movementSpeed, movementSpeed);
         break;
-      case 'B':
+      case 'A':
         setSpeed(-movementSpeed, -movementSpeed);
         break;
-      case 'L':
+      case 'S':
         setSpeed(movementSpeed, -movementSpeed); 
         break;
-      case 'R':
+      case 'D':
         setSpeed(-movementSpeed, movementSpeed); 
         break;
-      case 'S':
+      case 'X':
         stopAllMotors();
         break;
       default:
