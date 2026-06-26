@@ -6,7 +6,7 @@ BluetoothSerial SerialBT;
 
 //#include <HardwareSerial.h>
 
-// Function prototypes because c++ is 
+// Function prototypes because c++ is a liar
 void stopAllMotors();
 void directionForward();
 void directionBackward();
@@ -20,7 +20,7 @@ void driveDistance(float distance, int speed);
 //#define TXD2 17  // GPIO17 as TX
 
 //HardwareSerial mySerial(2); // Use Serial2
-
+ 
 // Motor Pins
 // Front Left
 const int PWMFL = 9;
@@ -43,8 +43,8 @@ const int BR1 = 5;
 const int BR2 = 4;
 
 // Encoder Connections
-const int ENCAFL = 2; // Encoder A pin for Front Left Motor
-const int ENCBFL = 3; // Encoder B pin for Front Left Motor
+const int ENCAFL = 32; // Encoder A pin for Front Left Motor
+const int ENCBFL = 33; // Encoder B pin for Front Left Motor
 
 const int ENCAFR = 12; // Encoder A pin for Front Right Motor
 const int ENCBFR = 13; // Encoder B pin for Front Right Motor
