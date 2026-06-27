@@ -38,7 +38,7 @@ const int PWMR = 19;
 const int R1 = 18;
 const int R2 = 5;
 
-byte servoPin = 9; // signal pin for the ESC.
+byte servoPin = 13; // signal pin for the ESC.
 Servo servo;
 
 // Encoder Connections
@@ -119,9 +119,15 @@ void loop() {
 
       case '+':
         powerValue += 100;
+        BS.println(powerValue);
         break;
       case '-':
         powerValue -= 100;
+        BS.println(powerValue);
+        break;
+      case 'k':
+        powerValue = 0;
+        BS.println(powerValue);
         break;
       default:
         BS.println("Unknown command received: " + dataFromPi);
