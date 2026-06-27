@@ -1,5 +1,8 @@
 #include <Arduino.h>
+#include <BluetoothSerial.h>
 
+
+BluetoothSerial BS;
 //#include <HardwareSerial.h>
 
 // Function prototypes because c++ is a liar
@@ -58,6 +61,7 @@ const int movementSpeed = 128; // Speed for driving forward/backward (0-255)
 void setup() {
 
   Serial.begin(115200);
+  BS.begin("ARCS");
   Serial.print("Started:");
    // Initialize Serial Monitor for debugging
   //mySerial.begin(115200, SERIAL_8N1, RXD2, TXD2); // Initialize Serial2 with defined pins
@@ -98,31 +102,31 @@ void setup() {
 
 void loop() {
 
-    if (Serial.available() > 0) {
-    char dataFromPi = Serial.read();
+    if (BS.available() > 0) {
+    char dataFromPi = BS.read();
        switch(dataFromPi) {
       case 'w':
         setSpeed(movementSpeed, movementSpeed);
-        Serial.print('w');
+        BS.print('w');
         break;
       case 's':
         setSpeed(-movementSpeed, -movementSpeed);
-        Serial.print('s');
+        BS.print('s');
         break;
       case 'a':
         setSpeed(movementSpeed, -movementSpeed); 
-        Serial.print('a');
+        BS.print('a');
         break;
       case 'd':
         setSpeed(-movementSpeed, movementSpeed); 
-        Serial.print('d');
+        BS.print('d');
         break;
       case ' ':
         stopAllMotors();
-        Serial.print("Stop");
+        BS.print("Stop");
         break;
       default:
-        Serial.println("Unknown command received: " + dataFromPi);
+        BS.println("Unknown command received: " + dataFromPi);
         break;
     }
     }
