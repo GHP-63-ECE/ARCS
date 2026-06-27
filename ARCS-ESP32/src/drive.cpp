@@ -1,5 +1,8 @@
 #include <Arduino.h>
 #include <BluetoothSerial.h>
+#include <ESP32Servo.h> // ONLY LIBRARY NECESARY FOR ESC 
+#include <Wire.h>
+#include <SPI.h>
 
 
 BluetoothSerial BS;
@@ -35,6 +38,8 @@ const int PWMR = 19;
 const int R1 = 18;
 const int R2 = 5;
 
+byte servoPin = 9; // signal pin for the ESC.
+Servo servo;
 
 // Encoder Connections
 const int ENCAFL = 34; // Encoder A pin for Front Left Motor
@@ -51,6 +56,8 @@ const long ticksPerRotation = 7*298;
 const float circumference = wheelDiameter * PI;
 
 const int movementSpeed = 128; // Speed for driving forward/backward (0-255)
+
+int powerValue = 1100;
 
 
 void setup() {
@@ -109,10 +116,20 @@ void loop() {
         stopAllMotors();
         BS.print("Stop");
         break;
+
+      case '+':
+        powerValue += 100;
+        break;
+      case '-':
+        powerValue -= 100;
+        break;
       default:
         BS.println("Unknown command received: " + dataFromPi);
         break;
     }
+    int pwmVal = map(powerValue,0, 1023, 1100, 1900); // translate POT values to ESC value.
+    float percentVal = ((pwmVal - 1100) / 8);
+    servo.writeMicroseconds(pwmVal);
     }
   }
 
