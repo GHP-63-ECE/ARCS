@@ -53,11 +53,78 @@ volatile long encoderValueRight = 0;
 
 const float wheelDiameter = 44.0; // mm
 const long ticksPerRotation = 7*298; 
-const float circumference = wheelDiameter * PI;
+const float wheelCircumference = wheelDiameter * PI;
+const float trackWidth = 150.0; // mm - TODO
 
-const int movementSpeed = 128; // Speed for driving forward/backward (0-255)
+float movementSpeed = 128.0; // Speed for driving forward/backward (0-255)
 
 int powerValue = 1100;
+
+const float rpmAtMaxSpeed = 100; // Maximum RPM of the motor at full speed - TODO
+const float turnSpeed = 128.0; // Speed for turning left/right (0-255) - TODO
+
+const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
+const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
+
+float RPM(float speed) {
+  return rpmAtMaxSpeed * (speed / 255.0);
+}
+
+float mmPerSecond(float speed) {
+  return (RPM(speed) * wheelCircumference) / 60;
+}
+
+float degreesPerSecond(float speed) {
+  return (2 * mmPerSecond(speed) / trackWidth) * 180 / PI;
+}
+
+void driveDistanceWithoutEncoders(float distance, int speed) {
+  float timeToDrive = distance / mmPerSecond(speed);
+  setSpeed(speed, speed);
+  delay(timeToDrive * 1000);
+  stopAllMotors();
+}
+
+void rotateDegreesWithoutEncoders(float degrees, int speed) {
+  float timeToRotate = degrees / degreesPerSecond(speed);
+  if (degrees > 0) {
+    setSpeed(speed, -speed); // Turn right
+  } else {
+    setSpeed(-speed, speed); // Turn left
+  }
+  delay(timeToRotate * 1000);
+  stopAllMotors();
+}
+
+// Calculating distance to the center of a crack based on normalized coordinates (cx, cy) of the crack in the camera's field of view
+float distanceToCrackCenter(float cx, float cy) {
+  // Convert normalized pixel coordinates to millimeters
+  float x_mm = cx * cameraFOVWidthMM;
+  float y_mm = cy * cameraFOVHeightMM;
+
+  // Calculate distance to the center of the crack using Pythagorean theorem
+  return sqrt(pow(x_mm - (cameraFOVWidthMM / 2), 2) + pow(y_mm - (cameraFOVHeightMM / 2), 2));
+}
+
+float angleToCrackCenter(float cx, float cy) {
+  // Convert normalized pixel coordinates to millimeters
+  float x_mm = cx * cameraFOVWidthMM;
+  float y_mm = cx * cameraFOVHeightMM;
+
+  // Calculate angle to the center of the crack using arctangent
+  return atan2(y_mm - (cameraFOVHeightMM / 2), x_mm - (cameraFOVWidthMM / 2)) * (180 / PI);
+}
+
+void driveToCrackCenter(float cx, float cy) {
+  float distance = distanceToCrackCenter(cx, cy);
+  float angle = angleToCrackCenter(cx, cy);
+
+  // Rotate to face the crack center
+  rotateDegreesWithoutEncoders(angle, turnSpeed);
+
+  // Drive forward to the crack center
+  driveDistanceWithoutEncoders(distance, movementSpeed);
+}
 
 
 void setup() {
@@ -88,7 +155,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ENCBFR), updateEncoderRight, RISING);
   
   // Turn off motors initially
- stopAllMotors();
+  stopAllMotors();
 }
 
 void loop() {
