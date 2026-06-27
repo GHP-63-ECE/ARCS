@@ -13,6 +13,10 @@ void setSpeed(int speedA, int speedB);
 void updateEncoderLeft();
 void updateEncoderRight();
 void driveDistance(float distance, int speed);
+void forwards();
+void backwards();
+void left();
+void right();
 
 //Raspberry Pi communication Pin Definitions
 //#define RXD2 16  // GPIO16 as RX
@@ -124,12 +128,12 @@ void backwards() {
 
 
 void left() {
- setSpeed(movementSpeed, -movementSpeed);
+ setSpeed(-movementSpeed, movementSpeed);
 }
 
 
 void right() {
- setSpeed(-movementSpeed, movementSpeed);
+ setSpeed(movementSpeed, -movementSpeed);
 }
 
 
