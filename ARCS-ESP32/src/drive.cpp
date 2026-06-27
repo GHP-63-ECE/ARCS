@@ -64,7 +64,11 @@ void setup() {
 
   Serial.begin(115200);
   BS.begin("ARCS");
-  Serial.print("Started:");
+  BS.print("Started:");
+  servo.attach(servoPin);
+  servo.writeMicroseconds(1500); // send "stop" signal to ESC. Also necessary to arm the ESC.
+  BS.println("ESC TEST PREP");
+  delay(7000);
    // Initialize Serial Monitor for debugging
   //mySerial.begin(115200, SERIAL_8N1, RXD2, TXD2); // Initialize Serial2 with defined pins
   //mySerial.println("Wake up from the matrix!");
