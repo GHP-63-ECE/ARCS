@@ -125,7 +125,7 @@ float angleToCrackCenter(float cx, float cy) {
   float y_mm = (cy - 0.5) * cameraFOVHeightMM;
 
   // Calculate angle to the center of the crack using arctangent
-  return atan2(x_mm, y_mm) * (180 / PI); // atan2 is flipped so that 0 degrees is forward and positive angles are to the right
+  return atan2(x_mm, -y_mm) * (180 / PI); // atan2 is flipped so that 0 degrees is forward and positive angles are to the right
 }
 
 // Drives to the crack's center such that the crack is centered in the camera's field of view at (0.5, 0.5) 
