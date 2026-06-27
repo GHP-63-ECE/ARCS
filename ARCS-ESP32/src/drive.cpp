@@ -3,7 +3,18 @@
 #include <ESP32Servo.h> // ONLY LIBRARY NECESARY FOR ESC 
 #include <Wire.h>
 #include <SPI.h>
+#include <ArduinoJson.h>
 
+#define RX2_PIN 16
+#define TX2_PIN 17
+#define SERIAL_BAUD 115200
+
+String inputString = "";
+bool stringComplete = false;
+
+float cx;     // Centroid X
+float cy;     // Centroid Y
+float conf;
 
 BluetoothSerial BS;
 //#include <HardwareSerial.h>
@@ -56,10 +67,10 @@ int powerValue = 1100;
 const float wheelDiameter = 44.0; // mm
 const long ticksPerRotation = 7*298; 
 const float wheelCircumference = wheelDiameter * PI;
-const float trackWidth = 150.0; // mm - TODO
+const float trackWidth = 234.0; // mm
 float movementSpeed = 128.0; // Speed for driving forward/backward (0-255)
 const float rpmAtMaxSpeed = 100; // Maximum RPM of the motor at full speed - TODO
-const float turnSpeed = 128.0; // Speed for turning left/right (0-255) - TODO
+const float turnSpeed = 128.0; // Speed for turning left/right (0-255)
 
 const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
 const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
@@ -129,6 +140,8 @@ void driveToCrackCenter(float cx, float cy) {
   driveDistanceWithoutEncoders(distance, movementSpeed);
 }
 
+void parsePiData(String jsonString);
+
 
 void setup() {
 
@@ -139,6 +152,9 @@ void setup() {
   servo.writeMicroseconds(1500); // send "stop" signal to ESC. Also necessary to arm the ESC.
   BS.println("ESC TEST PREP");
   delay(7000);
+
+  Serial2.begin(SERIAL_BAUD, SERIAL_8N1, RX2_PIN, TX2_PIN);
+  inputString.reserve(2048);
    // Initialize Serial Monitor for debugging
   //mySerial.begin(115200, SERIAL_8N1, RXD2, TXD2); // Initialize Serial2 with defined pins
   //mySerial.println("Wake up from the matrix!");
@@ -203,6 +219,10 @@ void loop() {
         powerValue = 0;
         BS.println(powerValue);
         break;
+      case 'p':
+        driveToCrackCenter(cx, cy);
+        BS.println("pathing");
+        break;
       default:
         BS.println("Unknown command received: " + dataFromPi);
         break;
@@ -211,6 +231,27 @@ void loop() {
     float percentVal = ((pwmVal - 1100) / 8);
     servo.writeMicroseconds(pwmVal);
     }
+
+    while (Serial2.available()) {
+    char inChar = (char)Serial2.read();
+    
+    // The Pi script ends every JSON packet with a newline character (\n)
+    if (inChar == '\n') {
+      stringComplete = true;
+    } else {
+      inputString += inChar;
+    }
+  }
+
+  // 2. Parse the JSON packet when a complete line is received
+  if (stringComplete) {
+    parsePiData(inputString);
+    
+    // Reset the buffer for the next incoming packet
+    inputString = "";
+    stringComplete = false;
+  }
+
   }
 
 
@@ -307,4 +348,59 @@ void updateEncoderRight(){
     encoderValueRight++;
   else
     encoderValueRight--;
+}
+
+void parsePiData(String jsonString) {
+  // DynamicJsonDocument allocates memory on the stack (v6/v7 compatible layout)
+  // 2048 bytes is plenty of room for several detected cracks in one frame
+  StaticJsonDocument<2048> doc;
+
+  DeserializationError error = deserializeJson(doc, jsonString);
+
+  if (error) {
+    Serial.print("JSON Deserialization failed: ");
+    Serial.println(error.f_str());
+    return;
+  }
+
+  // Extract core envelope variables
+  long frameId = doc["f"];       // Frame ID
+  int numDetections = doc["n"];  // Number of detections in this frame
+
+  // Print frame info to ESP32 console
+  Serial.print("Frame: ");
+  Serial.print(frameId);
+  Serial.print(" | Found: ");
+  Serial.print(numDetections);
+  Serial.println(" cracks");
+
+  // If there are detections, loop through and pull relative coordinates
+  if (numDetections > 0) {
+    JsonArray detections = doc["d"];
+    
+    for (int i = 0; i < detections.size(); i++) {
+      JsonObject d = detections[i];
+      
+      // Pull coordinates (0.0000 to 1.0000 relative to camera width/height)
+      cx = d["cx"];     // Centroid X
+      cy = d["cy"];     // Centroid Y
+      conf = d["conf"]; // Confidence score (0.0 to 1.0)
+
+      // Print parsed coordinates out
+      Serial.print("  -> Crack #");
+      Serial.print(i);
+      Serial.print(" | Center: (");
+      Serial.print(cx, 4);
+      Serial.print(", ");
+      Serial.print(cy, 4);
+      Serial.print(") | Confidence: ");
+      Serial.println(conf, 3);
+
+      // --- YOUR ESP32 CONTROL LOGIC GOES HERE ---
+      // For example:
+      // if (cx < 0.45) { Turn Left; }
+      // else if (cx > 0.55) { Turn Right; }
+      // else { Stay Centered; }
+    }
+  }
 }
