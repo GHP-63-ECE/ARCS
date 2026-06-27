@@ -21,25 +21,16 @@ void driveDistance(float distance, int speed);
 //HardwareSerial mySerial(2); // Use Serial2
  
 // Motor Pins
-// Front Left
-const int PWMFL = 23;
-const int FL1 = 22;
-const int FL2 = 21;
+// Left
+const int PWML = 23;
+const int L1 = 22;
+const int L2 = 21;
 
-// Front Right
-const int PWMFR = 19;
-const int FR1 = 18;
-const int FR2 = 5;
+// Right
+const int PWMR = 19;
+const int R1 = 18;
+const int R2 = 5;
 
-// Back Left
-const int PWMBL = 4;
-const int BL1 = 2;
-const int BL2 = 15;
-
-// Back Right
-const int PWMBR = 14;
-const int BR1 = 12;
-const int BR2 = 13;
 
 // Encoder Connections
 const int ENCAFL = 34; // Encoder A pin for Front Left Motor
@@ -69,25 +60,14 @@ void setup() {
 
   // Set all control pins to outputs
 
-  // Front Left
-  pinMode(PWMFL, OUTPUT);
-  pinMode(FL1, OUTPUT);
-  pinMode(FL2, OUTPUT);
-  
-  // Front Right
-  pinMode(PWMFR, OUTPUT);
-  pinMode(FR1, OUTPUT);
-  pinMode(FR2, OUTPUT);
-  
-  // Back Left
-  pinMode(PWMBL, OUTPUT);
-  pinMode(BL1, OUTPUT);
-  pinMode(BL2, OUTPUT);
-  
-  // Back Right
-  pinMode(PWMBR, OUTPUT);
-  pinMode(BR1, OUTPUT);
-  pinMode(BR2, OUTPUT);
+  //  Left
+  pinMode(PWML, OUTPUT);
+  pinMode(L1, OUTPUT);
+  pinMode(L2, OUTPUT);
+  //  Right
+  pinMode(PWMR, OUTPUT);
+  pinMode(R1, OUTPUT);
+  pinMode(R2, OUTPUT);
 
   // Set encoder pins to interrupts
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
@@ -106,19 +86,19 @@ void loop() {
     char dataFromPi = BS.read();
        switch(dataFromPi) {
       case 'w':
-        setSpeed(movementSpeed, movementSpeed);
+        forwards();
         BS.print('w');
         break;
       case 's':
-        setSpeed(-movementSpeed, -movementSpeed);
+        backwards();
         BS.print('s');
         break;
       case 'a':
-        setSpeed(movementSpeed, -movementSpeed); 
+        left();
         BS.print('a');
         break;
       case 'd':
-        setSpeed(-movementSpeed, movementSpeed); 
+        right();
         BS.print('d');
         break;
       case ' ':
@@ -133,21 +113,36 @@ void loop() {
   }
 
 
+void forwards() {
+ setSpeed(movementSpeed, movementSpeed);
+}
+
+
+void backwards() {
+ setSpeed(-movementSpeed, -movementSpeed);
+}
+
+
+void left() {
+ setSpeed(movementSpeed, -movementSpeed);
+}
+
+
+void right() {
+ setSpeed(-movementSpeed, movementSpeed);
+}
+
 
 void stopLeftMotors() {
-  digitalWrite(FL1, LOW);
-  digitalWrite(FL2, LOW);
-  
-  digitalWrite(BL1, LOW);
-  digitalWrite(BL2, LOW);
+  digitalWrite(L1, LOW);
+  digitalWrite(L2, LOW);
+  digitalWrite(PWML, 0);
 }
 
 void stopRightMotors() {
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, LOW);
-
-  digitalWrite(BR1, LOW);
-  digitalWrite(BR2, LOW);
+  digitalWrite(R1, LOW);
+  digitalWrite(R2, LOW);
+  digitalWrite(PWMR, 0);
 }
 
 void stopAllMotors() {
@@ -156,46 +151,35 @@ void stopAllMotors() {
 }
 
 void LeftMotorsForwards() {
-  digitalWrite(FL1, HIGH);
-  digitalWrite(FL2, LOW);
-
-  digitalWrite(BL1, HIGH);
-  digitalWrite(BL2, LOW);
+  digitalWrite(L1, HIGH);
+  digitalWrite(L2, LOW);
 }
 
 void RightMotorsForwards() {
-  digitalWrite(FR1, HIGH);
-  digitalWrite(FR2, LOW);
-
-  digitalWrite(BR1, HIGH);
-  digitalWrite(BR2, LOW);
+  digitalWrite(R1, HIGH);
+  digitalWrite(R2, LOW);
 }
 
 void LeftMotorsBackwards() {
-  digitalWrite(FL1, LOW);
-  digitalWrite(FL2, HIGH);
-
-  digitalWrite(BL1, LOW);
-  digitalWrite(BL2, HIGH);
+  digitalWrite(L1, LOW);
+  digitalWrite(L2, HIGH);
 }
 
 void RightMotorsBackwards() {
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, HIGH);
-
-  digitalWrite(BR1, LOW);
-  digitalWrite(BR2, HIGH);
+  digitalWrite(R1, LOW);
+  digitalWrite(R2, HIGH);
 }
 
-void setSpeed(int left, int right){
+ void setSpeed(int left, int right){
   if (left == 0) {
-    stopRightMotors();
+    stopLeftMotors();
   } else if (left < 0) {
     LeftMotorsBackwards();
     left = -left;
   } else {
     LeftMotorsForwards();
   }
+
 
   if (right == 0) {
     stopRightMotors();
@@ -205,23 +189,20 @@ void setSpeed(int left, int right){
   } else {
     RightMotorsForwards();
   }
-  analogWrite(PWMFL, left);
-  analogWrite(PWMBL, left);
-
-  analogWrite(PWMFR, right);
-  analogWrite(PWMBR, right);
+  analogWrite(PWML, left);
+  analogWrite(PWMR, right);
 }
 
 
 void updateEncoderLeft(){
-    if (digitalRead(ENCAFL)> digitalRead(ENCBFL))
+  if (digitalRead(ENCAFL)> digitalRead(ENCBFL))
     encoderValueLeft++;
   else
     encoderValueLeft--;
 }
 
 void updateEncoderRight(){
-   if (digitalRead(ENCAFR)> digitalRead(ENCBFR))
+  if (digitalRead(ENCAFR)> digitalRead(ENCBFR))
     encoderValueRight++;
   else
     encoderValueRight--;
