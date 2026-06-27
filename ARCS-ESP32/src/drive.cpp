@@ -78,6 +78,7 @@ float degreesPerSecond(float speed) {
 
 void driveDistanceWithoutEncoders(float distance, int speed) {
   float timeToDrive = distance / mmPerSecond(speed);
+  timeToDrive = abs(timeToDrive); // Ensure time is positive
   setSpeed(speed, speed);
   delay(timeToDrive * 1000);
   stopAllMotors();
@@ -85,6 +86,7 @@ void driveDistanceWithoutEncoders(float distance, int speed) {
 
 void rotateDegreesWithoutEncoders(float degrees, int speed) {
   float timeToRotate = degrees / degreesPerSecond(speed);
+  timeToRotate = abs(timeToRotate); // Ensure time is positive
   if (degrees > 0) {
     setSpeed(speed, -speed); // Turn right
   } else {
@@ -101,7 +103,7 @@ float distanceToCrackCenter(float cx, float cy) {
   float y_mm = (cy - 0.5) * cameraFOVHeightMM;
 
   // Calculate distance to the center of the crack using Pythagorean theorem
-  return sqrt(pow(x_mm - (cameraFOVWidthMM / 2), 2) + pow(y_mm - (cameraFOVHeightMM / 2), 2));
+  return sqrt(x_mm * x_mm + y_mm * y_mm);
 }
 
 float angleToCrackCenter(float cx, float cy) {
@@ -110,7 +112,7 @@ float angleToCrackCenter(float cx, float cy) {
   float y_mm = (cy - 0.5) * cameraFOVHeightMM;
 
   // Calculate angle to the center of the crack using arctangent
-  return atan2(y_mm - (cameraFOVHeightMM / 2), x_mm - (cameraFOVWidthMM / 2)) * (180 / PI);
+  return atan2(x_mm, y_mm) * (180 / PI); // atan2 is flipped so that 0 degrees is forward and positive angles are to the right
 }
 
 // Drives to the crack's center such that the crack is centered in the camera's field of view at (0.5, 0.5) 
