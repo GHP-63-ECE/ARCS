@@ -183,6 +183,27 @@ void setup() {
 
 void loop() {
 
+  // Read incoming data packets line-by-line
+  if (Serial.available() > 0) {
+    String incomingString = Serial.readStringUntil('\n');
+    incomingString.trim(); // Clean up any hidden whitespace
+
+    // Find the comma separator between cx and cy
+    int commaIndex = incomingString.indexOf(',');
+
+    if (commaIndex != -1) {
+      // Split the data string
+      String cxStr = incomingString.substring(0, commaIndex);
+      String cyStr = incomingString.substring(commaIndex + 1);
+
+      // Convert normalized text data back into floating-point numbers
+      float cx = cxStr.toFloat();
+      float cy = cyStr.toFloat();
+
+      driveToCrackCenter(cx, cy); // Call the function to drive to the crack center
+    }
+  }
+
     if (BS.available() > 0) {
     char dataFromPi = BS.read();
        switch(dataFromPi) {
