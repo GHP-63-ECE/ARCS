@@ -3,11 +3,15 @@
 #include <ESP32Servo.h> // ONLY LIBRARY NECESARY FOR ESC 
 #include <Wire.h>
 #include <SPI.h>
-
+#include <PID.h>
 
 BluetoothSerial BS;
 //#include <HardwareSerial.h>
+PID pidController = PID();
 
+double kP = 0;
+double kI = 0;
+double kD = 0;
 // Function prototypes because c++ is a liar
 void stopAllMotors();
 void directionForward();
@@ -38,15 +42,18 @@ const int PWMR = 19;
 const int R1 = 18;
 const int R2 = 5;
 
+int targetPositionRight;
+int targetPositionLeft;
+
 byte servoPin = 13; // signal pin for the ESC.
 Servo servo;
 
 // Encoder Connections
-const int ENCAFL = 34; // Encoder A pin for Front Left Motor
-const int ENCBFL = 35; // Encoder B pin for Front Left Motor
+const int ENCAFL = 35; // Encoder A pin for Front Left Motor
+const int ENCBFL = 34; // Encoder B pin for Front Left Motor
 
-const int ENCAFR = 36; // Encoder A pin for Front Right Motor
-const int ENCBFR = 39; // Encoder B pin for Front Right Motor
+const int ENCAFR = 33; // Encoder A pin for Front Right Motor
+const int ENCBFR = 32; // Encoder B pin for Front Right Motor
 
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
@@ -57,12 +64,14 @@ const float wheelDiameter = 44.0; // mm
 const long ticksPerRotation = 7*298; 
 const float wheelCircumference = wheelDiameter * PI;
 const float trackWidth = 150.0; // mm - TODO
-float movementSpeed = 128.0; // Speed for driving forward/backward (0-255)
+const float movementSpeed = 128.0; // Speed for driving forward/backward (0-255)
 const float rpmAtMaxSpeed = 100; // Maximum RPM of the motor at full speed - TODO
 const float turnSpeed = 128.0; // Speed for turning left/right (0-255) - TODO
 
 const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
 const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
+
+// MARK: Movement Calculations
 
 float RPM(float speed) {
   return rpmAtMaxSpeed * (speed / 255.0);
@@ -112,7 +121,7 @@ float angleToCrackCenter(float cx, float cy) {
   float y_mm = (cy - 0.5) * cameraFOVHeightMM;
 
   // Calculate angle to the center of the crack using arctangent
-  return atan2(x_mm, y_mm) * (180 / PI); // atan2 is flipped so that 0 degrees is forward and positive angles are to the right
+  return atan2(x_mm, -y_mm) * (180 / PI); // atan2 is flipped so that 0 degrees is forward and positive angles are to the right
 }
 
 // Drives to the crack's center such that the crack is centered in the camera's field of view at (0.5, 0.5) 
@@ -127,19 +136,11 @@ void driveToCrackCenter(float cx, float cy) {
   driveDistanceWithoutEncoders(distance, movementSpeed);
 }
 
+// MARK: Setup
 
 void setup() {
 
   Serial.begin(115200);
-  BS.begin("ARCS");
-  BS.print("Started:");
-  servo.attach(servoPin);
-  servo.writeMicroseconds(1500); // send "stop" signal to ESC. Also necessary to arm the ESC.
-  BS.println("ESC TEST PREP");
-  delay(7000);
-   // Initialize Serial Monitor for debugging
-  //mySerial.begin(115200, SERIAL_8N1, RXD2, TXD2); // Initialize Serial2 with defined pins
-  //mySerial.println("Wake up from the matrix!");
 
   // Set all control pins to outputs
 
@@ -154,83 +155,52 @@ void setup() {
 
   // Set encoder pins to interrupts
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENCBFL), updateEncoderLeft, RISING);
 
   attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENCBFR), updateEncoderRight, RISING);
   
+  pidController.Init(kP, kI, kD);
   // Turn off motors initially
   stopAllMotors();
 }
 
+// MARK: Loop
+
 void loop() {
+  // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
-    if (BS.available() > 0) {
-    char dataFromPi = BS.read();
-       switch(dataFromPi) {
-      case 'w':
-        forwards();
-        BS.print('w');
-        break;
-      case 's':
-        backwards();
-        BS.print('s');
-        break;
-      case 'a':
-        left();
-        BS.print('a');
-        break;
-      case 'd':
-        right();
-        BS.print('d');
-        break;
-      case ' ':
-        stopAllMotors();
-        BS.print("Stop");
-        break;
+  Serial.print(String(encoderValueLeft));
+  Serial.print(", ");
+  Serial.println(String(encoderValueRight));
+  
 
-      case '+':
-        powerValue += 100;
-        BS.println(powerValue);
-        break;
-      case '-':
-        powerValue -= 100;
-        BS.println(powerValue);
-        break;
-      case 'k':
-        powerValue = 0;
-        BS.println(powerValue);
-        break;
-      default:
-        BS.println("Unknown command received: " + dataFromPi);
-        break;
-    }
-    int pwmVal = map(powerValue,0, 1023, 1100, 1900); // translate POT values to ESC value.
-    float percentVal = ((pwmVal - 1100) / 8);
-    servo.writeMicroseconds(pwmVal);
-    }
-  }
+  // Serial.print(String(digitalRead(ENCAFR)));
+  // Serial.print(", ");
+  // Serial.print(String(digitalRead(ENCBFR)));
+  // Serial.print(", ");
+  // Serial.print(String(digitalRead(ENCAFL)));
+  // Serial.print(", ");
+  // Serial.println(String(digitalRead(ENCBFL)));
+}
 
+
+
+// MARK: Movement Functions
 
 void forwards() {
- setSpeed(movementSpeed, movementSpeed);
+  setSpeed(movementSpeed, movementSpeed);
 }
-
 
 void backwards() {
- setSpeed(-movementSpeed, -movementSpeed);
+  setSpeed(-movementSpeed, -movementSpeed);
 }
-
 
 void left() {
- setSpeed(-movementSpeed, movementSpeed);
+  setSpeed(-movementSpeed, movementSpeed);
 }
-
 
 void right() {
- setSpeed(movementSpeed, -movementSpeed);
+  setSpeed(movementSpeed, -movementSpeed);
 }
-
 
 void stopLeftMotors() {
   digitalWrite(L1, LOW);
@@ -269,7 +239,7 @@ void RightMotorsBackwards() {
   digitalWrite(R2, HIGH);
 }
 
- void setSpeed(int left, int right){
+void setSpeed(int left, int right){
   if (left == 0) {
     stopLeftMotors();
   } else if (left < 0) {
@@ -278,7 +248,6 @@ void RightMotorsBackwards() {
   } else {
     LeftMotorsForwards();
   }
-
 
   if (right == 0) {
     stopRightMotors();
@@ -292,17 +261,46 @@ void RightMotorsBackwards() {
   analogWrite(PWMR, right);
 }
 
+// MARK: Encoder Functions
 
 void updateEncoderLeft(){
-  if (digitalRead(ENCAFL)> digitalRead(ENCBFL))
+  if (digitalRead(ENCAFL) > digitalRead(ENCBFL))
     encoderValueLeft++;
   else
     encoderValueLeft--;
 }
 
 void updateEncoderRight(){
-  if (digitalRead(ENCAFR)> digitalRead(ENCBFR))
+  if (digitalRead(ENCAFR) > digitalRead(ENCBFR))
     encoderValueRight++;
   else
     encoderValueRight--;
+}
+
+// MARK: PID Functions
+
+void setMotorPositionLeft(int targetPos) {
+    int error = targetPos - encoderValueLeft;
+    targetPositionLeft = targetPos;
+
+    pidController.UpdateError(error);
+
+    analogWrite(PWML, pidController.p_error*kP + pidController.i_error*kI + pidController.d_error*kD);    
+}
+
+bool isAtTargetPositionLeft() {
+    return abs(targetPositionLeft - encoderValueLeft) < 2;
+}
+
+void setMotorPositionRight(int targetPos) {
+    int error = targetPos - encoderValueRight;
+    targetPositionRight = targetPos;
+
+    pidController.UpdateError(error);
+
+    analogWrite(PWMR, pidController.p_error*kP + pidController.i_error*kI + pidController.d_error*kD);    
+}
+
+bool isAtTargetPositionRight() {
+    return abs(targetPositionRight - encoderValueRight) < 2;
 }
