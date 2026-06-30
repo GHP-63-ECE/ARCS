@@ -3,9 +3,30 @@
 #include <ESP32Servo.h> // ONLY LIBRARY NECESARY FOR ESC 
 #include <Wire.h>
 #include <SPI.h>
+#include <Adafruit_MPU6050.h>
+
 #include <PID.h>
 
 BluetoothSerial BS;
+
+Adafruit_MPU6050 imu;
+
+float gyroX = 0;
+float gyroY = 0;
+float gyroZ = 0;
+
+float accelX;
+float accelY;
+float accelZ;
+
+double gyroX_offset = 0, gyroY_offset = 0, gyroZ_offset = 0;
+double accelX_offset = 0, accelY_offset = 0, accelZ_offset = 0;
+double raw_ax, raw_ay, raw_az;
+double raw_gx, raw_gy, raw_gz;
+double gyroX_offset_rad, gyroY_offset_rad, gyroZ_offset_rad;
+
+const int numSamples = 2000; // Number of readings to average
+
 //#include <HardwareSerial.h>
 PID pidController = PID();
 
@@ -153,6 +174,13 @@ void setup() {
   pinMode(R1, OUTPUT);
   pinMode(R2, OUTPUT);
 
+      if(!imu.begin()){
+        Serial.print("IMU not found");
+    }
+
+    imu.setAccelerometerRange(MPU6050_RANGE_2_G);
+    imu.setGyroRange(MPU6050_RANGE_2000_DEG);
+
   // Set encoder pins to interrupts
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
 
@@ -182,6 +210,66 @@ void loop() {
   // Serial.println(String(digitalRead(ENCBFL)));
 }
 
+    if (BS.available() > 0) {
+    char dataFromPi = BS.read();
+       switch(dataFromPi) {
+      case 'w':
+        forwards();
+        BS.print('w');
+        break;
+      case 's':
+        backwards();
+        BS.print('s');
+        break;
+      case 'a':
+        left();
+        BS.print('a');
+        break;
+      case 'd':
+        right();
+        BS.print('d');
+        break;
+      case ' ':
+        stopAllMotors();
+        BS.print("Stop");
+        break;
+
+      case '+':
+        powerValue += 100;
+        BS.println(powerValue);
+        break;
+      case '-':
+        powerValue -= 100;
+        BS.println(powerValue);
+        break;
+      case 'k':
+        powerValue = 0;
+        BS.println(powerValue);
+        break;
+      default:
+        BS.println("Unknown command received: " + dataFromPi);
+        break;
+    }
+    int pwmVal = map(powerValue,0, 1023, 1100, 1900); // translate POT values to ESC value.
+    float percentVal = ((pwmVal - 1100) / 8);
+    servo.writeMicroseconds(pwmVal);
+    }
+
+    sensors_event_t accel, gyro, temp;
+    imu.getEvent(&accel, &gyro, &temp);
+
+    accelX = accel.acceleration.x - 0.4;
+    accelY = accel.acceleration.y + 0.1;
+    accelZ = accel.acceleration.z - 0.84;
+
+    Serial.print("Accel X:");
+    Serial.print(accelX);
+    Serial.print(", Y:");
+    Serial.print(accelY);
+    Serial.print(", Z:");
+    Serial.print(accelZ);
+    Serial.print("m/s^2 ");
+  }
 
 
 // MARK: Movement Functions
