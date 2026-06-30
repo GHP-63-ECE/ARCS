@@ -65,6 +65,7 @@ volatile long encoderValueRight = 0;
 int powerValue = 1100;
 
 const float wheelDiameter = 44.0; // mm
+int ticks;
 const long ticksPerRotation = 7*298; 
 const float wheelCircumference = wheelDiameter * PI;
 const float trackWidth = 234.0; // mm
@@ -77,37 +78,43 @@ const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in
 
 
 
-float RPM(float speed) {
-  return rpmAtMaxSpeed * (speed / 255.0);
-}
 
-float mmPerSecond(float speed) {
-  return (RPM(speed) * wheelCircumference) / 60;
-}
 
-float degreesPerSecond(float speed) {
-  return (2 * mmPerSecond(speed) / trackWidth) * 180 / PI;
-}
+float distance(float mm) {
+int leftTicks = encoderValueLeft;
+int rightTicks = encoderValueRight;
+ticks = (leftTicks + rightTicks) / 2; // Average ticks from both encoders
+float distance = ((ticks)/(ticksPerRotation))*(PI*wheelDiameter);
+float target=mm-distance; // Calculate the remaining distance to travel
 
-void driveDistanceWithoutEncoders(float distance, int speed) {
-  float timeToDrive = distance / mmPerSecond(speed);
-  timeToDrive = abs(timeToDrive); // Ensure time is positive
-  setSpeed(speed, speed);
-  delay(timeToDrive * 1000);
-  stopAllMotors();
-}
-
-void rotateDegreesWithoutEncoders(float degrees, int speed) {
-  float timeToRotate = degrees / degreesPerSecond(speed);
-  timeToRotate = abs(timeToRotate); // Ensure time is positive
-  if (degrees > 0) {
-    setSpeed(speed, -speed); // Turn right
-  } else {
-    setSpeed(-speed, speed); // Turn left
+while (abs(target) > 1) { // Continue until within 1 mm of the target
+    if (target > 0) {
+      forwards();
+    } else {
+      backwards();
+    }
+    ticks = (leftTicks + rightTicks) / 2; // Update average ticks
+    distance = ((ticks)/(ticksPerRotation))*(PI*wheelDiameter);
+    target=mm-distance; // Update remaining distance
   }
-  delay(timeToRotate * 1000);
-  stopAllMotors();
+  stopAllMotors(); // Stop motors when target is reached
+ return distance;
 }
+
+float turnDegrees(float theta) {
+int leftTicks = encoderValueLeft;
+int rightTicks = encoderValueRight;
+  float leftDistance = distance(leftTicks);
+  float rightDistance = distance(rightTicks);
+  float targetAngle=(leftDistance - rightDistance) / trackWidth * (180.0 / PI); // Convert radians to degrees
+  if (targetAngle < theta) {
+    left();
+  } else {
+    right();
+  }
+  
+}
+
 
 // Calculating distance to the center of a crack based on normalized coordinates (cx, cy) of the crack in the camera's field of view
 float distanceToCrackCenter(float cx, float cy) {
@@ -133,11 +140,8 @@ void driveToCrackCenter(float cx, float cy) {
   float distance = distanceToCrackCenter(cx, cy);
   float angle = angleToCrackCenter(cx, cy);
 
-  // Rotate to face the crack center
-  rotateDegreesWithoutEncoders(angle, turnSpeed);
+  // Rotate to face the crack
 
-  // Drive forward to the crack center
-  driveDistanceWithoutEncoders(distance, movementSpeed);
 }
 
 void parsePiData(String jsonString);
@@ -201,9 +205,16 @@ void loop() {
       float cy = cyStr.toFloat();
 
       driveToCrackCenter(cx, cy); // Call the function to drive to the crack center
+      angleToCrackCenter(cx, cy); // Call the function to drive to the crack angle
+
+
     }
   }
+}
 
+
+
+/* 
     if (BS.available() > 0) {
     char dataFromPi = BS.read();
        switch(dataFromPi) {
@@ -425,3 +436,4 @@ void parsePiData(String jsonString) {
     }
   }
 }
+*/
