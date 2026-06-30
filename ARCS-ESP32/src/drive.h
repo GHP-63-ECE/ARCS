@@ -47,7 +47,7 @@ public:
   void stopAllMotors();
 
   // Function to set individual motor speeds (PWM values: 0 to 255)
-  void setSpeed(int speedA, int speedB);
+  void setPower(int speedA, int speedB);
 
   void updateEncoderLeft();
 

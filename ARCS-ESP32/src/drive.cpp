@@ -37,7 +37,7 @@ double kD = 0;
 void stopAllMotors();
 void directionForward();
 void directionBackward();
-void setSpeed(int speedA, int speedB);
+void setPower(int speedA, int speedB);
 void updateEncoderLeft();
 void updateEncoderRight();
 void driveDistance(float distance, int speed);
@@ -45,6 +45,12 @@ void forwards();
 void backwards();
 void left();
 void right();
+void setPowerLeft(int left);
+void setPowerRight(int right);
+int getEncoderSpeedLeft();
+int getEncoderSpeedRight();
+void setSpeedRight(int speed);
+void setSpeedLeft(int speed);
 
 //Raspberry Pi communication Pin Definitions
 //#define RXD2 16  // GPIO16 as RX
@@ -92,6 +98,13 @@ const float turnSpeed = 128.0; // Speed for turning left/right (0-255) - TODO
 const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
 const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
 
+int previousEncoderPosLeft = 0;
+int previousEncoderPosRight = 0;
+
+int leftPower;
+int rightPower;
+
+
 // MARK: Movement Calculations
 
 float RPM(float speed) {
@@ -109,7 +122,7 @@ float degreesPerSecond(float speed) {
 void driveDistanceWithoutEncoders(float distance, int speed) {
   float timeToDrive = distance / mmPerSecond(speed);
   timeToDrive = abs(timeToDrive); // Ensure time is positive
-  setSpeed(speed, speed);
+  setPower(speed, speed);
   delay(timeToDrive * 1000);
   stopAllMotors();
 }
@@ -118,9 +131,9 @@ void rotateDegreesWithoutEncoders(float degrees, int speed) {
   float timeToRotate = degrees / degreesPerSecond(speed);
   timeToRotate = abs(timeToRotate); // Ensure time is positive
   if (degrees > 0) {
-    setSpeed(speed, -speed); // Turn right
+    setPower(speed, -speed); // Turn right
   } else {
-    setSpeed(-speed, speed); // Turn left
+    setPower(-speed, speed); // Turn left
   }
   delay(timeToRotate * 1000);
   stopAllMotors();
@@ -196,9 +209,12 @@ void setup() {
 void loop() {
   // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
-  Serial.print(String(encoderValueLeft));
-  Serial.print(", ");
-  Serial.println(String(encoderValueRight));
+  // Serial.print(String(encoderValueLeft));
+  // Serial.print(", ");
+  // Serial.println(String(encoderValueRight));
+
+  updateEncoderLeft();
+  updateEncoderRight();
   
 
   // Serial.print(String(digitalRead(ENCAFR)));
@@ -208,86 +224,129 @@ void loop() {
   // Serial.print(String(digitalRead(ENCAFL)));
   // Serial.print(", ");
   // Serial.println(String(digitalRead(ENCBFL)));
-}
 
-    if (BS.available() > 0) {
-    char dataFromPi = BS.read();
-       switch(dataFromPi) {
-      case 'w':
-        forwards();
-        BS.print('w');
-        break;
-      case 's':
-        backwards();
-        BS.print('s');
-        break;
-      case 'a':
-        left();
-        BS.print('a');
-        break;
-      case 'd':
-        right();
-        BS.print('d');
-        break;
-      case ' ':
-        stopAllMotors();
-        BS.print("Stop");
-        break;
 
-      case '+':
-        powerValue += 100;
-        BS.println(powerValue);
-        break;
-      case '-':
-        powerValue -= 100;
-        BS.println(powerValue);
-        break;
-      case 'k':
-        powerValue = 0;
-        BS.println(powerValue);
-        break;
-      default:
-        BS.println("Unknown command received: " + dataFromPi);
-        break;
-    }
-    int pwmVal = map(powerValue,0, 1023, 1100, 1900); // translate POT values to ESC value.
-    float percentVal = ((pwmVal - 1100) / 8);
-    servo.writeMicroseconds(pwmVal);
-    }
+    // if (BS.available() > 0) {
+    // char dataFromPi = BS.read();
+    //    switch(dataFromPi) {
+    //   case 'w':
+    //     forwards();
+    //     BS.print('w');
+    //     break;
+    //   case 's':
+    //     backwards();
+    //     BS.print('s');
+    //     break;
+    //   case 'a':
+    //     left();
+    //     BS.print('a');
+    //     break;
+    //   case 'd':
+    //     right();
+    //     BS.print('d');
+    //     break;
+    //   case ' ':
+    //     stopAllMotors();
+    //     BS.print("Stop");
+    //     break;
 
-    sensors_event_t accel, gyro, temp;
-    imu.getEvent(&accel, &gyro, &temp);
+    //   case '+':
+    //     powerValue += 100;
+    //     BS.println(powerValue);
+    //     break;
+    //   case '-':
+    //     powerValue -= 100;
+    //     BS.println(powerValue);
+    //     break;
+    //   case 'k':
+    //     powerValue = 0;
+    //     BS.println(powerValue);
+    //     break;
+    //   default:
+    //     BS.println("Unknown command received: " + dataFromPi);
+    //     break;
+    // }
+    // int pwmVal = map(powerValue,0, 1023, 1100, 1900); // translate POT values to ESC value.
+    // float percentVal = ((pwmVal - 1100) / 8);
+    // servo.writeMicroseconds(pwmVal);
+    // }
 
-    accelX = accel.acceleration.x - 0.4;
-    accelY = accel.acceleration.y + 0.1;
-    accelZ = accel.acceleration.z - 0.84;
+    // sensors_event_t accel, gyro, temp;
+    // imu.getEvent(&accel, &gyro, &temp);
 
-    Serial.print("Accel X:");
-    Serial.print(accelX);
-    Serial.print(", Y:");
-    Serial.print(accelY);
-    Serial.print(", Z:");
-    Serial.print(accelZ);
-    Serial.print("m/s^2 ");
+    // accelX = accel.acceleration.x - 0.4;
+    // accelY = accel.acceleration.y + 0.1;
+    // accelZ = accel.acceleration.z - 0.84;
+
+    // Serial.print("Accel X:");
+    // Serial.print(accelX);
+    // Serial.print(", Y:");
+    // Serial.print(accelY);
+    // Serial.print(", Z:");
+    // Serial.print(accelZ);
+    // Serial.print("m/s^2 ");
+
+    setSpeedLeft(1000);
+    setSpeedRight(1000);
+
+    delay(1000);
+
+    Serial.print(getEncoderSpeedLeft()+",");
+    Serial.println(getEncoderSpeedRight());
+
+    previousEncoderPosLeft = encoderValueLeft;
+    previousEncoderPosRight = encoderValueRight;
   }
 
 
 // MARK: Movement Functions
 
 void forwards() {
-  setSpeed(movementSpeed, movementSpeed);
+  setPower(movementSpeed, movementSpeed);
 }
 
 void backwards() {
-  setSpeed(-movementSpeed, -movementSpeed);
+  setPower(-movementSpeed, -movementSpeed);
 }
 
 void left() {
-  setSpeed(-movementSpeed, movementSpeed);
+  setPower(-movementSpeed, movementSpeed);
 }
 
 void right() {
-  setSpeed(movementSpeed, -movementSpeed);
+  setPower(movementSpeed, -movementSpeed);
+}
+
+int getEncoderSpeedLeft(){
+  int speed = encoderValueLeft - previousEncoderPosLeft;
+  return speed;
+}
+
+int getEncoderSpeedRight(){
+  int speed = encoderValueRight - previousEncoderPosRight;
+  return speed;
+}
+
+void tractionControlLeft(){
+  if(!((pow(accelX,2)+pow(accelZ, 2))-pow(9.81, 2) > 0.1) && (getEncoderSpeedLeft() > 1)){
+    setPowerLeft(leftPower - 1);
+  }
+}
+
+
+//In encoder ticks/sec
+void setSpeedLeft(int speed){
+  int power = int((speed + 140)/10.2);
+  setPowerLeft(power);
+}
+
+void setSpeedRight(int speed){
+  int power = int((speed + 136)/9.9);
+  setPowerRight(power);
+}
+
+void tractionControlRight(){
+
 }
 
 void stopLeftMotors() {
@@ -327,7 +386,7 @@ void RightMotorsBackwards() {
   digitalWrite(R2, HIGH);
 }
 
-void setSpeed(int left, int right){
+void setPower(int left, int right){
   if (left == 0) {
     stopLeftMotors();
   } else if (left < 0) {
@@ -346,6 +405,33 @@ void setSpeed(int left, int right){
     RightMotorsForwards();
   }
   analogWrite(PWML, left);
+  analogWrite(PWMR, right);
+}
+
+void setPowerLeft(int left){
+  leftPower = left;
+  if (left == 0) {
+    stopLeftMotors();
+  } else if (left < 0) {
+    LeftMotorsBackwards();
+    left = -left;
+  } else {
+    LeftMotorsForwards();
+  }
+  analogWrite(PWML, left);
+}
+
+void setPowerRight(int right){
+  rightPower = right;
+
+  if (right == 0) {
+    stopRightMotors();
+  } else if (right < 0) {
+    RightMotorsBackwards();
+    right = -right;
+  } else {
+    RightMotorsForwards();
+  }
   analogWrite(PWMR, right);
 }
 
