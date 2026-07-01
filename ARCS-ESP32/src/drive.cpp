@@ -8,10 +8,12 @@
 BluetoothSerial BS;
 //#include <HardwareSerial.h>
 PID pidController = PID();
+PID leftDrivePID = PID();
+PID rightDrivePID = PID();
 
-double kP = 0;
-double kI = 0;
-double kD = 0;
+double kP = 0.45;
+double kI = 0.0;
+double kD = 0.0;
 // Function prototypes because c++ is a liar
 void stopAllMotors();
 void directionForward();
@@ -20,10 +22,16 @@ void setSpeed(int speedA, int speedB);
 void updateEncoderLeft();
 void updateEncoderRight();
 void driveDistance(float distance, int speed);
+void rotateDegrees(float degrees, int speed);
 void forwards();
 void backwards();
 void left();
 void right();
+long readEncoderLeft();
+long readEncoderRight();
+long distanceToEncoderTicks(float distanceMm);
+int pidOutputToSpeed(double output, long error, int maxSpeed);
+bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed);
 
 //Raspberry Pi communication Pin Definitions
 //#define RXD2 16  // GPIO16 as RX
@@ -42,8 +50,8 @@ const int PWMR = 19;
 const int R1 = 18;
 const int R2 = 5;
 
-int targetPositionRight;
-int targetPositionLeft;
+long targetPositionRight;
+long targetPositionLeft;
 
 byte servoPin = 13; // signal pin for the ESC.
 Servo servo;
@@ -67,6 +75,9 @@ const float trackWidth = 150.0; // mm - TODO
 const float movementSpeed = 128.0; // Speed for driving forward/backward (0-255)
 const float rpmAtMaxSpeed = 100; // Maximum RPM of the motor at full speed - TODO
 const float turnSpeed = 128.0; // Speed for turning left/right (0-255) - TODO
+const int encoderToleranceTicks = 8;
+const int minimumPIDSpeed = 55;
+const unsigned long movementLoopDelayMs = 10;
 
 const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
 const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
@@ -105,6 +116,101 @@ void rotateDegreesWithoutEncoders(float degrees, int speed) {
   stopAllMotors();
 }
 
+long readEncoderLeft() {
+  noInterrupts();
+  long value = encoderValueLeft;
+  interrupts();
+  return value;
+}
+
+long readEncoderRight() {
+  noInterrupts();
+  long value = encoderValueRight;
+  interrupts();
+  return value;
+}
+
+long distanceToEncoderTicks(float distanceMm) {
+  return lround((distanceMm / wheelCircumference) * ticksPerRotation);
+}
+
+int pidOutputToSpeed(double output, long error, int maxSpeed) {
+  if (abs(error) <= encoderToleranceTicks) {
+    return 0;
+  }
+
+  int pwm = abs((int)round(output));
+  if (pwm > maxSpeed) {
+    pwm = maxSpeed;
+  }
+
+  int speedFloor = min(minimumPIDSpeed, maxSpeed);
+  if (pwm < speedFloor) {
+    pwm = speedFloor;
+  }
+
+  return error >= 0 ? pwm : -pwm;
+}
+
+bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed) {
+  int maxSpeed = constrain(abs(speed), 0, 255);
+  if (maxSpeed == 0 || (leftTargetTicks == 0 && rightTargetTicks == 0)) {
+    stopAllMotors();
+    return true;
+  }
+
+  long startLeft = readEncoderLeft();
+  long startRight = readEncoderRight();
+  targetPositionLeft = startLeft + leftTargetTicks;
+  targetPositionRight = startRight + rightTargetTicks;
+
+  leftDrivePID.Init(kP, kI, kD);
+  rightDrivePID.Init(kP, kI, kD);
+
+  float longestDistanceMm = (max(abs(leftTargetTicks), abs(rightTargetTicks)) / (float)ticksPerRotation) * wheelCircumference;
+  unsigned long timeoutMs = (unsigned long)((longestDistanceMm / mmPerSecond(maxSpeed)) * 3000.0) + 1000;
+  unsigned long startTime = millis();
+
+  while (true) {
+    long currentLeft = readEncoderLeft();
+    long currentRight = readEncoderRight();
+    long leftError = targetPositionLeft - currentLeft;
+    long rightError = targetPositionRight - currentRight;
+
+    bool leftAtTarget = abs(leftError) <= encoderToleranceTicks;
+    bool rightAtTarget = abs(rightError) <= encoderToleranceTicks;
+    if (leftAtTarget && rightAtTarget) {
+      stopAllMotors();
+      return true;
+    }
+
+    if (millis() - startTime > timeoutMs) {
+      stopAllMotors();
+      Serial.println("Encoder movement timed out");
+      return false;
+    }
+
+    leftDrivePID.UpdateError(leftError);
+    rightDrivePID.UpdateError(rightError);
+
+    int leftSpeed = leftAtTarget ? 0 : pidOutputToSpeed(leftDrivePID.TotalError(), leftError, maxSpeed);
+    int rightSpeed = rightAtTarget ? 0 : pidOutputToSpeed(rightDrivePID.TotalError(), rightError, maxSpeed);
+    setSpeed(leftSpeed, rightSpeed);
+    delay(movementLoopDelayMs);
+  }
+}
+
+void driveDistance(float distance, int speed) {
+  long targetTicks = distanceToEncoderTicks(distance);
+  runToEncoderTargets(targetTicks, targetTicks, speed);
+}
+
+void rotateDegrees(float degrees, int speed) {
+  float wheelTravelMm = PI * trackWidth * (degrees / 360.0);
+  long targetTicks = distanceToEncoderTicks(wheelTravelMm);
+  runToEncoderTargets(targetTicks, -targetTicks, speed);
+}
+
 // Calculating distance to the center of a crack based on normalized coordinates (cx, cy) of the crack in the camera's field of view
 float distanceToCrackCenter(float cx, float cy) {
   // Convert normalized pixel coordinates to millimeters
@@ -130,10 +236,10 @@ void driveToCrackCenter(float cx, float cy) {
   float angle = angleToCrackCenter(cx, cy);
 
   // Rotate to face the crack center
-  rotateDegreesWithoutEncoders(angle, turnSpeed);
+  rotateDegrees(angle, turnSpeed);
 
   // Drive forward to the crack center
-  driveDistanceWithoutEncoders(distance, movementSpeed);
+  driveDistance(distance, movementSpeed);
 }
 
 // MARK: Setup
@@ -159,6 +265,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
   
   pidController.Init(kP, kI, kD);
+  leftDrivePID.Init(kP, kI, kD);
+  rightDrivePID.Init(kP, kI, kD);
   // Turn off motors initially
   stopAllMotors();
 }
@@ -168,10 +276,92 @@ void setup() {
 void loop() {
   // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
-  Serial.print(String(encoderValueLeft));
-  Serial.print(", ");
-  Serial.println(String(encoderValueRight));
-  
+  // Serial.print(String(encoderValueLeft));
+  // Serial.print(", ");
+  // Serial.println(String(encoderValueRight));
+
+  // driveDistance(440 * PI, 255);
+  // forwards();
+  setSpeed(255, 255);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(238, 238);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(221, 221);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(204, 204);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(187, 187);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(170, 170);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(153, 153);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(136, 136);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(119, 119);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(102, 102);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(85, 85);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(68, 68);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(51, 51);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(34, 34);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+  setSpeed(17, 17);
+  delay(5000);
+  stopAllMotors();
+  delay(1000);
+
+
+  // left();
+  while (true) {
+    delay(1000);
+  }
 
   // Serial.print(String(digitalRead(ENCAFR)));
   // Serial.print(", ");
