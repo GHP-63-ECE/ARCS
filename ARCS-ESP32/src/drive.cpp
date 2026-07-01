@@ -29,10 +29,15 @@ const int numSamples = 2000; // Number of readings to average
 
 //#include <HardwareSerial.h>
 PID pidController = PID();
+PID velPIDController = PID();
 
-double kP = 0;
-double kI = 0;
-double kD = 0;
+const double kP = 0;
+const double kI = 0;
+const double kD = 0;
+
+const double kP_vel = 0.1;
+const double kI_vel = 0;
+const double kD_vel = 0;
 // Function prototypes because c++ is a liar
 void stopAllMotors();
 void directionForward();
@@ -200,6 +205,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
   
   pidController.Init(kP, kI, kD);
+  velPIDController.Init(kP, kI, kD);
   // Turn off motors initially
   stopAllMotors();
 }
