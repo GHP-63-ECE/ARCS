@@ -1,187 +1,68 @@
 #include <Arduino.h>
-#include <BluetoothSerial.h>
-#include "drive.h"
+#include <WiFi.h>
+#include <esp_now.h>
 
-BluetoothSerial SerialBT;
+// Replace with the receiver's MAC address
+uint8_t receiverAddress[] = {0x24, 0x6F, 0x28, 0xAA, 0xBB, 0xCC};
 
-//#include <HardwareSerial.h>
+// Data structure (must match receiver)
+typedef struct {
+int value;
+float voltage;
+char message[32];
+} DataPacket;
 
-// Function prototypes because c++ is a liar
-void stopAllMotors();
-void directionForward();
-void directionBackward();
-void setSpeed(int speedA, int speedB);
-void updateEncoderLeft();
-void updateEncoderRight();
-void driveDistance(float distance, int speed);
+DataPacket data;
 
-//Raspberry Pi communication Pin Definitions
-//#define RXD2 16  // GPIO16 as RX
-//#define TXD2 17  // GPIO17 as TX
-
-//HardwareSerial mySerial(2); // Use Serial2
- 
-// Motor Pins
-// Front Left
-const int PWMFL = 9;
-const int FL1 = 8;
-const int FL2 = 7;
-
-// Front Right
-const int PWMFR = 3;
-const int FR1 = 5;
-const int FR2 = 4;
-
-// Back Left
-const int PWMBL = 9;
-const int BL1 = 8;
-const int BL2 = 7;
-
-// Back Right
-const int PWMBR = 3;
-const int BR1 = 5;
-const int BR2 = 4;
-
-// Encoder Connections
-const int ENCAFL = 32; // Encoder A pin for Front Left Motor
-const int ENCBFL = 33; // Encoder B pin for Front Left Motor
-
-const int ENCAFR = 12; // Encoder A pin for Front Right Motor
-const int ENCBFR = 13; // Encoder B pin for Front Right Motor
-
-volatile long encoderValueLeft = 0;
-volatile long encoderValueRight = 0;
-
-const float wheelDiameter = 44.0; // mm
-const long ticksPerRotation = 7*298; 
-const float circumference = wheelDiameter * PI;
-
-
-
+// Callback after sending
+void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+Serial.print("Send Status: ");
+Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Success" : "Failed");
+}
 
 void setup() {
+Serial.begin(115200);
 
-  Serial.begin(115200);
-  SerialBT.begin("ARCS"); // Name your Bluetooth device
-  Serial.println("Bluetooth device is ready to pair!");
-   // Initialize Serial Monitor for debugging
-  //mySerial.begin(115200, SERIAL_8N1, RXD2, TXD2); // Initialize Serial2 with defined pins
-  //mySerial.println("Wake up from the matrix!");
+// Set WiFi to Station mode
+WiFi.mode(WIFI_STA);
 
-  // Set all control pins to outputs
+// Initialize ESP-NOW
+if (esp_now_init() != ESP_OK) {
+Serial.println("Error initializing ESP-NOW");
+return;
+}
 
-  // Front Left
-  pinMode(PWMFL, OUTPUT);
-  pinMode(FL1, OUTPUT);
-  pinMode(FL2, OUTPUT);
-  
-  // Front Right
-  pinMode(PWMFR, OUTPUT);
-  pinMode(FR1, OUTPUT);
-  pinMode(FR2, OUTPUT);
-  
-  // Back Left
-  pinMode(PWMBL, OUTPUT);
-  pinMode(BL1, OUTPUT);
-  pinMode(BL2, OUTPUT);
-  
-  // Back Right
-  pinMode(PWMBR, OUTPUT);
-  pinMode(BR1, OUTPUT);
-  pinMode(BR2, OUTPUT);
+// Register send callback
+esp_now_register_send_cb(onDataSent);
 
-  // Set encoder pins to interrupts
-  attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENCBFL), updateEncoderLeft, RISING);
+// Add receiver
+esp_now_peer_info_t peerInfo = {};
+memcpy(peerInfo.peer_addr, receiverAddress, 6);
+peerInfo.channel = 0;
+peerInfo.encrypt = false;
 
-  attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENCBFR), updateEncoderRight, RISING);
-  
-  // Turn off motors initially
- stopAllMotors();
+if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+Serial.println("Failed to add peer");
+return;
+}
 }
 
 void loop() {
+data.value = random(0, 100);
+data.voltage = analogRead(34) * (3.3 / 4095.0);
+strcpy(data.message, "Hello!");
 
-    if (SerialBT.available() > 0) {
-    String dataFromPi = SerialBT.readStringUntil('\n');
-    if (dataFromPi.length() > 0) {
-       switch(dataFromPi.charAt(0)) {
-      case 'F':
-        directionForward();
-        setSpeed(255, 255);
-        break;
-      case 'B':
-        directionBackward();
-        setSpeed(255, 255);
-        break;
-      case 'L':
-        directionForward();
-        setSpeed(255, 100); // Left turn: slower left motor
-        break;
-      case 'R':
-        directionForward();
-        setSpeed(100, 255); // Right turn: slower right motor
-        break;
-      case 'S':
-        stopAllMotors();
-        break;
-      default:
-        SerialBT.println("Unknown command received: " + dataFromPi);
-        break;
-    }
-    }
-  }
+esp_err_t result = esp_now_send(
+receiverAddress,
+(uint8_t *)&data,
+sizeof(data)
+);
 
+if (result == ESP_OK) {
+Serial.println("Packet queued");
+} else {
+Serial.println("Send error");
 }
 
-void driveDistance(float distance, int speed) {
-
-}
-
-
-void stopAllMotors(){
-  digitalWrite(FL1, LOW);
-  digitalWrite(FL2, LOW);
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, LOW);
-  digitalWrite(BL1, LOW);
-  digitalWrite(BL2, LOW);
-  digitalWrite(BR1, LOW);
-  digitalWrite(BR2, LOW);
-}
-
-void directionForward(){
-  digitalWrite(FL1, HIGH);
-  digitalWrite(FL2, LOW);
-  digitalWrite(FR1, HIGH);
-  digitalWrite(FR2, LOW);
-}
-
-void directionBackward(){
-  digitalWrite(FL1, LOW);
-  digitalWrite(FL2, HIGH);
-  digitalWrite(FR1, LOW);
-  digitalWrite(FR2, HIGH);
-}
-
-void setSpeed(int speedA, int speedB){
-  analogWrite(PWMFL, speedA);
-  analogWrite(PWMFR, speedB);
-  analogWrite(PWMBL, speedA);
-  analogWrite(PWMBR, speedB);
-}
-
-void updateEncoderLeft(){
-    if (digitalRead(ENCAFL)> digitalRead(ENCBFL))
-    encoderValueLeft++;
-  else
-    encoderValueLeft--;
-}
-
-void updateEncoderRight(){
-   if (digitalRead(ENCAFR)> digitalRead(ENCBFR))
-    encoderValueRight++;
-  else
-    encoderValueRight--;
+delay(1000);
 }
