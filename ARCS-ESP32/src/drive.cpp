@@ -9,7 +9,7 @@
 
 BluetoothSerial BS;
 
-Adafruit_MPU6050 imu;
+// Adafruit_MPU6050 imu;
 
 float gyroX = 0;
 float gyroY = 0;
@@ -45,6 +45,7 @@ void forwards();
 void backwards();
 void left();
 void right();
+void setExtrusionPower(int power);
 
 //Raspberry Pi communication Pin Definitions
 //#define RXD2 16  // GPIO16 as RX
@@ -76,6 +77,10 @@ const int ENCBFL = 34; // Encoder B pin for Front Left Motor
 const int ENCAFR = 33; // Encoder A pin for Front Right Motor
 const int ENCBFR = 32; // Encoder B pin for Front Right Motor
 
+const int PWM_PIN1 = 27;
+const int ENI = 14;
+const int PWM_PIN2 = 26; 
+
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
 
@@ -91,6 +96,8 @@ const float turnSpeed = 128.0; // Speed for turning left/right (0-255) - TODO
 
 const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
 const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
+
+int pwr = 100;
 
 // MARK: Movement Calculations
 
@@ -162,6 +169,7 @@ void driveToCrackCenter(float cx, float cy) {
 void setup() {
 
   Serial.begin(115200);
+  BS.begin("ARCS");
 
   // Set all control pins to outputs
 
@@ -174,12 +182,16 @@ void setup() {
   pinMode(R1, OUTPUT);
   pinMode(R2, OUTPUT);
 
-      if(!imu.begin()){
-        Serial.print("IMU not found");
-    }
+  pinMode(PWM_PIN1, OUTPUT);
+  pinMode(PWM_PIN2, OUTPUT);
+  pinMode(ENI, OUTPUT);
 
-    imu.setAccelerometerRange(MPU6050_RANGE_2_G);
-    imu.setGyroRange(MPU6050_RANGE_2000_DEG);
+    //   if(!imu.begin()){
+    //     Serial.print("IMU not found");
+    // }
+
+    // imu.setAccelerometerRange(MPU6050_RANGE_2_G);
+    // imu.setGyroRange(MPU6050_RANGE_2000_DEG);
 
   // Set encoder pins to interrupts
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
@@ -208,7 +220,7 @@ void loop() {
   // Serial.print(String(digitalRead(ENCAFL)));
   // Serial.print(", ");
   // Serial.println(String(digitalRead(ENCBFL)));
-}
+
 
     if (BS.available() > 0) {
     char dataFromPi = BS.read();
@@ -246,6 +258,29 @@ void loop() {
         powerValue = 0;
         BS.println(powerValue);
         break;
+      
+      case 'l':
+        setExtrusionPower(pwr);
+        BS.println("Extruder Forward");
+        break;
+      case 'r':
+        setExtrusionPower(-pwr);
+        BS.println("Extruder Backward");
+        break;
+      case 'e':
+        setExtrusionPower(0);
+        BS.println("Extruder Stop");
+        break;
+      case 'p':
+        pwr += 10;
+        if (pwr > 255) pwr = 255;
+        BS.println("Power: " + String(pwr));
+        break;
+      case 'm':
+        pwr -= 10;
+        if (pwr < 0) pwr = 0;
+        BS.println("Power: " + String(pwr));
+        break;
       default:
         BS.println("Unknown command received: " + dataFromPi);
         break;
@@ -255,20 +290,20 @@ void loop() {
     servo.writeMicroseconds(pwmVal);
     }
 
-    sensors_event_t accel, gyro, temp;
-    imu.getEvent(&accel, &gyro, &temp);
+    // sensors_event_t accel, gyro, temp;
+    // imu.getEvent(&accel, &gyro, &temp);
 
-    accelX = accel.acceleration.x - 0.4;
-    accelY = accel.acceleration.y + 0.1;
-    accelZ = accel.acceleration.z - 0.84;
+    // accelX = accel.acceleration.x - 0.4;
+    // accelY = accel.acceleration.y + 0.1;
+    // accelZ = accel.acceleration.z - 0.84;
 
-    Serial.print("Accel X:");
-    Serial.print(accelX);
-    Serial.print(", Y:");
-    Serial.print(accelY);
-    Serial.print(", Z:");
-    Serial.print(accelZ);
-    Serial.print("m/s^2 ");
+    // Serial.print("Accel X:");
+    // Serial.print(accelX);
+    // Serial.print(", Y:");
+    // Serial.print(accelY);
+    // Serial.print(", Z:");
+    // Serial.print(accelZ);
+    // Serial.print("m/s^2 ");
   }
 
 
@@ -327,6 +362,22 @@ void RightMotorsBackwards() {
   digitalWrite(R2, HIGH);
 }
 
+void extDirectionForward() {
+  digitalWrite(PWM_PIN1, HIGH);
+  digitalWrite(PWM_PIN2, LOW);
+}
+
+void extDirectionBackward() {
+  digitalWrite(PWM_PIN1, LOW);
+  digitalWrite(PWM_PIN2, HIGH);
+}
+
+void stopExtruder() {
+  digitalWrite(PWM_PIN1, LOW);
+  digitalWrite(PWM_PIN2, LOW);
+  analogWrite(ENI, 0);
+}
+
 void setSpeed(int left, int right){
   if (left == 0) {
     stopLeftMotors();
@@ -347,6 +398,18 @@ void setSpeed(int left, int right){
   }
   analogWrite(PWML, left);
   analogWrite(PWMR, right);
+}
+
+void setExtrusionPower(int power) {
+  if (power == 0) {
+    stopExtruder();
+  } else if (power < 0) {
+    power = -power;
+    extDirectionBackward();
+  } else {
+    extDirectionForward();
+  }
+  analogWrite(ENI, power);
 }
 
 // MARK: Encoder Functions
