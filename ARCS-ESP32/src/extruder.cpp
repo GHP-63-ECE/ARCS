@@ -1,8 +1,8 @@
 #include <Arduino.h>
-#include <PID.h>
-#include <Adafruit_VL6180X.h>
-#include "extruder.h"
+// #include <PID.h>
 #include <BluetoothSerial.h>
+#include <Wire.h>
+#include <SPI.h>
 
 BluetoothSerial BS;
 
@@ -10,46 +10,51 @@ BluetoothSerial BS;
 const int ENCODER_PIN_A1 = 0;
 const int ENCODER_PIN_B1 = 0;
 const int PWM_PIN1 = 27;
-const int ENI = 14;
+u_int8_t ENI = 14;
 const int PWM_PIN2 = 26; 
+const int pwmFreq = 5000; 
+const int pwmResolution = 8; 
+const int pwmChannel = 0;
 
 const int STANDARD_DISTANCE = 0;
 
-int depth;
+// int depth;
 
 //Spray pins
 // const int PWM_PIN2 = 0;
-PID pidController = PID();
+// PID pidController = PID();
 
-const int kP = 0;
-const int kI = 0;
-const int kD = 0;
+// const int kP = 0;
+// const int kI = 0;
+// const int kD = 0;
 
 int motorPosition = 0; 
 
 int targetPosition = 0;
 
-Adafruit_VL6180X ir = Adafruit_VL6180X();
 
 int encoderAValue;
 int encoderBValue;
 
-void setMotorPosition(int targetPos);
-bool isAtTargetPosition();
+// void setMotorPosition(int targetPos);
+
 void spray();
 void setPowerGantry(int power);
 
 int pw = 100;
 
-bool isFilledFully();
 
 void setup() {
   pinMode(PWM_PIN1, OUTPUT);
   pinMode(PWM_PIN2, OUTPUT);
   pinMode(ENI, OUTPUT);
 
+//   ledcSetup(pwmChannel, pwmFreq, pwmResolution);
+//     ledcAttachPin(ENI, pwmChannel);
+
   Serial.begin(115200);
-  BS.begin("ARCS-Extruder");
+  Serial.println("Starting Bluetooth Serial");
+  BS.begin("ARCS");
 
 //   ir.begin();
 //   depth = ir.readRange();
@@ -100,22 +105,20 @@ void loop() {
 // }
 
 void spray(){
-    analogWrite(ENI, 100);
+    // ledcWrite(pwmChannel, 100);
     digitalWrite(PWM_PIN1, LOW);
     digitalWrite(PWM_PIN2, HIGH);
     Serial.println("Spraying");
 
 }
 
-void setPowerGantry(int power) {
-    
-    analogWrite(ENI, power);
+void setPowerGantry(int power) { 
 
+    // ledcWrite(pwmChannel, abs(power));
     if(power == 0) {
         digitalWrite(PWM_PIN1, LOW);
         digitalWrite(PWM_PIN2, LOW);
-        analogWrite(ENI, 0);
-        return;
+        // analogWrite(ENI, 0);
     } else if (power < 0) {
         power = -power;
         digitalWrite(PWM_PIN1, HIGH);
@@ -124,5 +127,9 @@ void setPowerGantry(int power) {
         digitalWrite(PWM_PIN1, LOW);
         digitalWrite(PWM_PIN2, HIGH);
     }
+
+    analogWrite(14, 100);
+
+
 
 }
