@@ -1,15 +1,11 @@
 
 #include <Arduino.h>
-#include <BluetoothSerial.h>
 #include <ESP32Servo.h> // ONLY LIBRARY NECESARY FOR ESC 
-#include <Wire.h>
-#include <SPI.h>
 #include <PID.h>
 #include <esp_now.h>
 #include <WiFi.h>
 
-BluetoothSerial BS;
-//#include <HardwareSerial.h>
+// # include <HardwareSerial.h>
 PID pidController = PID();
 PID leftDrivePID = PID();
 PID rightDrivePID = PID();

@@ -1,11 +1,5 @@
 #include "PID.h"
 
-#include <iostream>
-
-#define WINDOWSIZE 25
-
-using namespace std;
-
 /*
  * : Complete the PID class.
  */
@@ -23,8 +17,10 @@ void PID::Init(double Kp, double Ki, double Kd) {
     i_error = 0.0;
     d_error = 0.0;
 
-    rollingaccumulator.resize(WINDOWSIZE, 0.0);
-    rollingindex = WINDOWSIZE - 1;
+    for (int i = 0; i < rollingAccumulatorSize; i++) {
+        rollingaccumulator[i] = 0.0;
+    }
+    rollingindex = rollingAccumulatorSize - 1;
 }
 
 void PID::UpdateError(double cte) {
@@ -32,12 +28,11 @@ void PID::UpdateError(double cte) {
     d_error = cte - p_error;
     p_error = cte;
 
-    if (Ki != 0.0 && rollingaccumulator.size() > 0) {
-        rollingindex = (rollingindex + 1) % WINDOWSIZE;
+    if (Ki != 0.0) {
+        rollingindex = (rollingindex + 1) % rollingAccumulatorSize;
         double head  = rollingaccumulator[rollingindex];
         rollingaccumulator[rollingindex] = cte ;
         i_error += cte - head;
-        // cout << "i error: " << i_error << endl;
     } else {
         i_error += cte;
     }
