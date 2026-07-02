@@ -6,7 +6,6 @@
 // Replace with the receiver's MAC address
 uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4e, 0x03, 0x98}; //  70:4b:ca:4e:03:98
 
-
 const int vy1Pin = 32;
 const int vy2Pin = 35;
 const int vy3Pin = 34;
@@ -24,12 +23,12 @@ bool button3Value = false;
 // Structure example to send data
 // Must match the receiver structure
 typedef struct struct_message {
-int vy1;
-int vy2;
-int vy3;
-bool button1;
-bool button2;
-bool button3;
+  int vy1;
+  int vy2;
+  int vy3;
+  bool button1;
+  bool button2;
+  bool button3;
 } struct_message;
 
 // Create a struct_message called myData
@@ -111,12 +110,9 @@ void loop() {
   else {
     Serial.println("Error sending the data");
   }
-delay(500); // Send data every 500 milliseconds
+// delay(500); // Send data every 500 milliseconds
 }
 /*
-
-
-
 
 #include <esp_now.h>
 #include <WiFi.h>
@@ -177,8 +173,5 @@ void setup() {
 void loop() {
 
 }
-
-
-
 
 */
