@@ -29,10 +29,17 @@ const int numSamples = 2000; // Number of readings to average
 
 //#include <HardwareSerial.h>
 PID pidController = PID();
+PID pidControllerGantry = PID();
 
+
+// Drivetrain PID values
 double kP = 0;
 double kI = 0;
 double kD = 0;
+
+double kP_gantry = 0.1;
+double kI_gantry = 0;
+double kD_gantry = 0;
 // Function prototypes because c++ is a liar
 void stopAllMotors();
 void directionForward();
@@ -46,6 +53,8 @@ void backwards();
 void left();
 void right();
 void setExtrusionPower(int power);
+void updateEncoderGantry();
+void setExtrusionPosition(int targetPos);
 
 //Raspberry Pi communication Pin Definitions
 //#define RXD2 16  // GPIO16 as RX
@@ -66,6 +75,7 @@ const int R2 = 5;
 
 int targetPositionRight;
 int targetPositionLeft;
+int targetPositionGantry;
 
 byte servoPin = 13; // signal pin for the ESC.
 Servo servo;
@@ -77,12 +87,19 @@ const int ENCBFL = 34; // Encoder B pin for Front Left Motor
 const int ENCAFR = 33; // Encoder A pin for Front Right Motor
 const int ENCBFR = 32; // Encoder B pin for Front Right Motor
 
+/**@brief 1st Encoder Pin for Extruder */
+const int ENCEXTA = 36;
+/**@brief 2nd Encoder Pin for Extruder */
+const int ENCEXTB = 39;
+
 const int PWM_PIN1 = 27;
 const int ENI = 14;
 const int PWM_PIN2 = 26; 
 
+
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
+volatile long encoderValueGantry = 0;
 
 int powerValue = 1100;
 
@@ -197,8 +214,11 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
 
   attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
+
+  attachInterrupt(digitalPinToInterrupt(ENCEXTA), updateEncoderGantry, RISING);
   
   pidController.Init(kP, kI, kD);
+  pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
   // Turn off motors initially
   stopAllMotors();
 }
@@ -210,8 +230,13 @@ void loop() {
 
   Serial.print(String(encoderValueLeft));
   Serial.print(", ");
-  Serial.println(String(encoderValueRight));
-  
+  Serial.print(String(encoderValueRight));
+  Serial.print(", ");
+  Serial.println(String(encoderValueGantry));
+
+  digitalWrite(PWM_PIN1, HIGH);
+  digitalWrite(PWM_PIN2, LOW);
+  analogWrite(ENI, 100);
 
   // Serial.print(String(digitalRead(ENCAFR)));
   // Serial.print(", ");
@@ -362,22 +387,6 @@ void RightMotorsBackwards() {
   digitalWrite(R2, HIGH);
 }
 
-void extDirectionForward() {
-  digitalWrite(PWM_PIN1, HIGH);
-  digitalWrite(PWM_PIN2, LOW);
-}
-
-void extDirectionBackward() {
-  digitalWrite(PWM_PIN1, LOW);
-  digitalWrite(PWM_PIN2, HIGH);
-}
-
-void stopExtruder() {
-  digitalWrite(PWM_PIN1, LOW);
-  digitalWrite(PWM_PIN2, LOW);
-  analogWrite(ENI, 0);
-}
-
 void setSpeed(int left, int right){
   if (left == 0) {
     stopLeftMotors();
@@ -400,6 +409,24 @@ void setSpeed(int left, int right){
   analogWrite(PWMR, right);
 }
 
+// MARK: Extruder Functions
+
+void extDirectionForward() {
+  digitalWrite(PWM_PIN1, HIGH);
+  digitalWrite(PWM_PIN2, LOW);
+}
+
+void extDirectionBackward() {
+  digitalWrite(PWM_PIN1, LOW);
+  digitalWrite(PWM_PIN2, HIGH);
+}
+
+void stopExtruder() {
+  digitalWrite(PWM_PIN1, LOW);
+  digitalWrite(PWM_PIN2, LOW);
+  analogWrite(ENI, 0);
+}
+
 void setExtrusionPower(int power) {
   if (power == 0) {
     stopExtruder();
@@ -410,6 +437,15 @@ void setExtrusionPower(int power) {
     extDirectionForward();
   }
   analogWrite(ENI, power);
+}
+
+void setExtrusionPosition(int targetPos) {
+    int error = targetPos - encoderValueGantry;
+    targetPositionGantry = targetPos;
+
+    pidControllerGantry.UpdateError(error);
+
+    analogWrite(ENI, pidControllerGantry.p_error*kP_gantry + pidControllerGantry.i_error*kI_gantry + pidControllerGantry.d_error*kD_gantry);    
 }
 
 // MARK: Encoder Functions
@@ -427,6 +463,15 @@ void updateEncoderRight(){
   else
     encoderValueRight--;
 }
+
+void updateEncoderGantry(){
+  if (digitalRead(ENCEXTA) > digitalRead(ENCEXTB))
+    encoderValueGantry++;
+  else
+    encoderValueGantry--;
+}
+
+
 
 // MARK: PID Functions
 
