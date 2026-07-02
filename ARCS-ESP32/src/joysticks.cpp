@@ -6,8 +6,9 @@
 // Replace with the receiver's MAC address
 uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4e, 0x03, 0x98}; //  70:4b:ca:4e:03:98
 
-const int vy1Pin = 32;
-const int vy2Pin = 35;
+
+const int vy1Pin = 33;
+const int vy2Pin = 32;
 const int vy3Pin = 34;
 const int button1Pin = 5;
 const int button2Pin = 18;
@@ -45,9 +46,9 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 void setup() {
   // Init Serial Monitor
   Serial.begin(115200);
-  pinMode(vy1Pin, INPUT);
-  pinMode(vy2Pin, INPUT);
-  pinMode(vy3Pin, INPUT);
+  pinMode(vy1Pin, INPUT_PULLUP);
+  pinMode(vy2Pin, INPUT_PULLUP);
+  pinMode(vy3Pin, INPUT_PULLUP);
   pinMode(button1Pin, INPUT_PULLUP);
   pinMode(button2Pin, INPUT_PULLUP);
   pinMode(button3Pin, INPUT_PULLUP);
@@ -110,7 +111,7 @@ void loop() {
   else {
     Serial.println("Error sending the data");
   }
-// delay(500); // Send data every 500 milliseconds
+
 }
 /*
 
