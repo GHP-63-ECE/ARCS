@@ -5,6 +5,8 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <PID.h>
+#include <esp_now.h>
+#include <WiFi.h>
 
 BluetoothSerial BS;
 //#include <HardwareSerial.h>
@@ -13,8 +15,9 @@ PID leftDrivePID = PID();
 PID rightDrivePID = PID();
 
 double kP = 0.45;
-double kI = 0.0035;
+double kI = 0.0035; 
 double kD = 0.0;
+
 // Function prototypes because c++ is a liar
 void stopAllMotors();
 void directionForward();
@@ -85,94 +88,43 @@ const unsigned long movementLoopDelayMs = 10;
 const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
 const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
 
-// MARK: Setup
 
-void setup() {
-
-  Serial.begin(115200);
-
-  // Set all control pins to outputs
-
-  //  Left
-  pinMode(PWML, OUTPUT);
-  pinMode(L1, OUTPUT);
-  pinMode(L2, OUTPUT);
-  //  Right
-  pinMode(PWMR, OUTPUT);
-  pinMode(R1, OUTPUT);
-  pinMode(R2, OUTPUT);
-
-  pinMode(ENCAFL, INPUT);
-  pinMode(ENCBFL, INPUT);
-  pinMode(ENCAFR, INPUT);
-  pinMode(ENCBFR, INPUT);
-
-  // Set encoder pins to interrupts
-  attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
-
-  attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
-  
-  pidController.Init(kP, kI, kD);
-  leftDrivePID.Init(kP, kI, kD);
-  rightDrivePID.Init(kP, kI, kD);
-  // Turn off motors initially
-  stopAllMotors();
-}
-
-// MARK: Loop
-long encoderStartLeft = 0;
-long encoderStartRight = 0;
-long encoderEndLeft = 0;
-long encoderEndRight = 0;
-float rpmLeft = 0.0;
-float rpmRight = 0.0;
-int pwmValue = 255;
-
-void loop() {
-  // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
-
-  // Serial.print(String(encoderValueLeft));
-  // Serial.print(", ");
-  // Serial.println(String(encoderValueRight));
-
-  // driveDistance(44 * 2 * PI, 255);
-
-  turnDegrees(180 , 200);
-  // turnDegrees2(90);
-
-  // forwards();
-  // for (pwmValue = 255; pwmValue >= 0; pwmValue -= 17) {
-  //   encoderStartLeft = encoderValueLeft;
-  //   encoderStartRight = encoderValueRight;
-  //   setSpeed(pwmValue, pwmValue);
-  //   delay(5000);
-  //   stopAllMotors();
-  //   encoderEndLeft = encoderValueLeft;
-  //   encoderEndRight = encoderValueRight;
-  //   rpmLeft = (encoderEndLeft - encoderStartLeft) / 5.0 * 60.0 / ticksPerRotation;
-  //   rpmRight = (encoderEndRight - encoderStartRight) / 5.0 * 60.0 / ticksPerRotation;
-  //   Serial.print("PWM Value: ");
-  //   Serial.print(pwmValue);
-  //   Serial.print(", RPM Left: ");
-  //   Serial.print(rpmLeft);
-  //   Serial.print(", RPM Right: ");
-  //   Serial.println(rpmRight);
-  //   delay(5000);
-  // }
-
-  // setSpeed(255, 255);
+// MARK: ESP-NOW Communication
 
 
-  // left();
-  while (true) {}
+// Structure example to receive data
+// Must match the sender structure
+typedef struct struct_message {
+int vy1;
+int vy2;
+int vy3;
+bool button1;
+bool button2;
+bool button3;
+} struct_message;
 
-  // Serial.print(String(digitalRead(ENCAFR)));
-  // Serial.print(", ");
-  // Serial.print(String(digitalRead(ENCBFR)));
-  // Serial.print(", ");
-  // Serial.print(String(digitalRead(ENCAFL)));
-  // Serial.print(", ");
-  // Serial.println(String(digitalRead(ENCBFL)));
+
+// Create a struct_message called myData
+struct_message myData;
+
+// callback function that will be executed when data is received
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  memcpy(&myData, incomingData, sizeof(myData));
+  Serial.print("Bytes received: ");
+  Serial.println(len);
+  Serial.print("VY1 ");
+  Serial.println(myData.vy1);
+  Serial.print("VY2 ");
+  Serial.println(myData.vy2);
+  Serial.print("VY3 ");
+  Serial.println(myData.vy3);
+  Serial.print("Button1: ");
+  Serial.println(myData.button1);
+  Serial.print("Button2: ");
+  Serial.println(myData.button2);
+  Serial.print("Button3: ");
+  Serial.println(myData.button3);
+  Serial.println();
 }
 
 // MARK: Movement Calculations
@@ -336,42 +288,11 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
   }
 }
 
+// MARK: Drive & Crack Functions
+
 void driveDistance(float distance, int speed) {
   long targetTicks = distanceToEncoderTicks(distance);
   runToEncoderTargets(targetTicks, targetTicks, speed);
-}
-
-void turnDegrees2(float theta) {
-  int startLeft = encoderValueLeft; // starting point for encoders
-  int startRight = encoderValueRight;
-
-  Serial.print("Starting Encoders: Left = ");
-  Serial.println(startLeft);
-  Serial.print(", Right = ");
-  Serial.println(startRight);
-
-  float currentAngle = 0; // Reset current angle
-  float angleTolerance = 1.0; // Tolerance in degrees for stopping the turn
-
-  // 3. Keep moving until the target is reached
-  while (abs(currentAngle-theta) > abs(angleTolerance)) {
-    // Direct motors based on target direction
-    Serial.print(" Current Angle: ");
-    Serial.println(currentAngle);
-    if (theta > 0) {
-        left();  // Turn left
-    } else {
-        right(); // Turn right
-    }
-    
-    // 4. Calculate real-time distance traveled by each wheel
-    float leftDistance = (encoderValueLeft - startLeft) * DISTANCE_PER_TICK;
-    float rightDistance = (encoderValueRight - startRight) * DISTANCE_PER_TICK;
-    
-    // 5. Update the current angle dynamically
-    currentAngle = ((leftDistance - rightDistance) / trackWidth) * (180.0 / PI);
-
-  } 
 }
 
 void turnDegrees(float degrees, int speed) {
@@ -379,7 +300,6 @@ void turnDegrees(float degrees, int speed) {
   long targetTicks = distanceToEncoderTicks(wheelTravelMm);
   runToEncoderTargets(targetTicks, -targetTicks, speed);
 }
-
 
 // Calculating distance to the center of a crack based on normalized coordinates (cx, cy) of the crack in the camera's field of view
 float distanceToCrackCenter(float cx, float cy) {
@@ -417,8 +337,6 @@ void driveToCrackCenter(float cx, float cy) {
   // Drive forward to the crack center
   driveDistance(distance, movementSpeed);
 }
-
-
 
 // MARK: Movement Functions
 
@@ -542,5 +460,121 @@ bool isAtTargetPositionRight() {
     return abs(targetPositionRight - encoderValueRight) < 2;
 }
 
+// MARK: Setup
+
+void setup() {
+
+  Serial.begin(115200);
+
+  // Set all control pins to outputs
+
+  //  Left
+  pinMode(PWML, OUTPUT);
+  pinMode(L1, OUTPUT);
+  pinMode(L2, OUTPUT);
+  //  Right
+  pinMode(PWMR, OUTPUT);
+  pinMode(R1, OUTPUT);
+  pinMode(R2, OUTPUT);
+
+  pinMode(ENCAFL, INPUT);
+  pinMode(ENCBFL, INPUT);
+  pinMode(ENCAFR, INPUT);
+  pinMode(ENCBFR, INPUT);
+
+  // Set encoder pins to interrupts
+  attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
+
+  attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
+  
+  pidController.Init(kP, kI, kD);
+  leftDrivePID.Init(kP, kI, kD);
+  rightDrivePID.Init(kP, kI, kD);
+  // Turn off motors initially
+  stopAllMotors();
+
+  // Set device as a Wi-Fi Station
+  WiFi.mode(WIFI_STA);
+
+  // Init ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+  
+  // Once ESPNow is successfully Init, we will register for recv CB to
+  // get recv packer info
+  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+}
+
+// MARK: Loop
+long encoderStartLeft = 0;
+long encoderStartRight = 0;
+long encoderEndLeft = 0;
+long encoderEndRight = 0;
+float rpmLeft = 0.0;
+float rpmRight = 0.0;
+int pwmValue = 255;
+
+void loop() {
+
+  Serial.print("VY1: ");
+  Serial.print(myData.vy1);
+  Serial.print(", VY2: ");
+  Serial.print(myData.vy2);
+  Serial.print(", VY3: ");
+  Serial.print(myData.vy3);
+  Serial.print(", Button1: ");
+  Serial.print(myData.button1);
+  Serial.print(", Button2: ");
+  Serial.print(myData.button2);
+  Serial.print(", Button3: ");
+  Serial.println(myData.button3);
+
+  // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
+
+  // Serial.print(String(encoderValueLeft));
+  // Serial.print(", ");
+  // Serial.println(String(encoderValueRight));
+
+  // driveDistance(44 * 2 * PI, 255);
+
+  // turnDegrees(180 , 200);
+  // turnDegrees2(90);
+
+  // forwards();
+  // for (pwmValue = 255; pwmValue >= 0; pwmValue -= 17) {
+  //   encoderStartLeft = encoderValueLeft;
+  //   encoderStartRight = encoderValueRight;
+  //   setSpeed(pwmValue, pwmValue);
+  //   delay(5000);
+  //   stopAllMotors();
+  //   encoderEndLeft = encoderValueLeft;
+  //   encoderEndRight = encoderValueRight;
+  //   rpmLeft = (encoderEndLeft - encoderStartLeft) / 5.0 * 60.0 / ticksPerRotation;
+  //   rpmRight = (encoderEndRight - encoderStartRight) / 5.0 * 60.0 / ticksPerRotation;
+  //   Serial.print("PWM Value: ");
+  //   Serial.print(pwmValue);
+  //   Serial.print(", RPM Left: ");
+  //   Serial.print(rpmLeft);
+  //   Serial.print(", RPM Right: ");
+  //   Serial.println(rpmRight);
+  //   delay(5000);
+  // }
+
+  // setSpeed(255, 255);
+
+
+  // left();
+  while (true) {}
+
+  // Serial.print(String(digitalRead(ENCAFR)));
+  // Serial.print(", ");
+  // Serial.print(String(digitalRead(ENCBFR)));
+  // Serial.print(", ");
+  // Serial.print(String(digitalRead(ENCAFL)));
+  // Serial.print(", ");
+  // Serial.println(String(digitalRead(ENCBFL)));
+}
 
  
