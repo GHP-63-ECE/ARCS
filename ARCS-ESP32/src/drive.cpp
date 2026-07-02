@@ -85,7 +85,7 @@ const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in 
 const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
 
 
-// MARK: ESP-NOW Communication
+// MARK: ESP-NOW Comms
 
 
 // Structure example to receive data
@@ -100,26 +100,26 @@ bool button3;
 } struct_message;
 
 
-// Create a struct_message called myData
-struct_message myData;
+// Create a struct_message called joystickData
+struct_message joystickData;
 
 // callback function that will be executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
-  memcpy(&myData, incomingData, sizeof(myData));
+  memcpy(&joystickData, incomingData, sizeof(joystickData));
   Serial.print("Bytes received: ");
   Serial.println(len);
   Serial.print("VY1 ");
-  Serial.println(myData.vy1);
+  Serial.println(joystickData.vy1);
   Serial.print("VY2 ");
-  Serial.println(myData.vy2);
+  Serial.println(joystickData.vy2);
   Serial.print("VY3 ");
-  Serial.println(myData.vy3);
+  Serial.println(joystickData.vy3);
   Serial.print("Button1: ");
-  Serial.println(myData.button1);
+  Serial.println(joystickData.button1);
   Serial.print("Button2: ");
-  Serial.println(myData.button2);
+  Serial.println(joystickData.button2);
   Serial.print("Button3: ");
-  Serial.println(myData.button3);
+  Serial.println(joystickData.button3);
   Serial.println();
 }
 
@@ -297,11 +297,15 @@ void turnDegrees(float degrees, int speed) {
   runToEncoderTargets(targetTicks, -targetTicks, speed);
 }
 
+// Origin Coordinates
+float cameraXOrigin = 0.5; // Normalized X coordinate of the camera's origin 
+float cameraYOrigin = 0.5; // Normalized Y coordinate of the camera's origin
+
 // Calculating distance to the center of a crack based on normalized coordinates (cx, cy) of the crack in the camera's field of view
 float distanceToCrackCenter(float cx, float cy) {
   // Convert normalized pixel coordinates to millimeters
-  float x_mm = (cx - 0.5) * cameraFOVWidthMM;
-  float y_mm = (cy - 0.5) * cameraFOVHeightMM;
+  float x_mm = (cx - cameraXOrigin) * cameraFOVWidthMM;
+  float y_mm = (cy - cameraYOrigin) * cameraFOVHeightMM;
 
   // Calculate distance to the center of the crack using Pythagorean theorem
   return sqrt(x_mm * x_mm + y_mm * y_mm);
@@ -309,8 +313,8 @@ float distanceToCrackCenter(float cx, float cy) {
 
 float angleToCrackCenter(float cx, float cy) {
   // Convert normalized pixel coordinates to millimeters
-  float x_mm = (cx - 0.5) * cameraFOVWidthMM;
-  float y_mm = (cy - 0.5) * cameraFOVHeightMM;
+  float x_mm = (cx - cameraXOrigin) * cameraFOVWidthMM;
+  float y_mm = (cy - cameraYOrigin) * cameraFOVHeightMM;
 
   // Calculate angle to the center of the crack using arctangent
   return atan2(x_mm, -y_mm) * (180 / PI); // atan2 is flipped so that 0 degrees is forward and positive angles are to the right
@@ -369,7 +373,6 @@ void stopAllMotors() {
   stopRightMotors();
 }
 
-
 void LeftMotorsForwards() {
   digitalWrite(L1, HIGH);
   digitalWrite(L2, LOW);
@@ -412,7 +415,7 @@ void setSpeed(int left, int right){
   analogWrite(PWMR, right);
 }
 
-// MARK: Encoder Functions
+// MARK: Encoder Updating
 
 void updateEncoderLeft(){
   if (digitalRead(ENCAFL) > digitalRead(ENCBFL))
@@ -511,23 +514,41 @@ long encoderEndRight = 0;
 float rpmLeft = 0.0;
 float rpmRight = 0.0;
 int pwmValue = 255;
+int edfSpeed = 0;
 
 void loop() {
 
-  Serial.print("VY1: ");
-  Serial.print(myData.vy1);
-  Serial.print(", VY2: ");
-  Serial.print(myData.vy2);
-  Serial.print(", VY3: ");
-  Serial.print(myData.vy3);
-  Serial.print(", Button1: ");
-  Serial.print(myData.button1);
-  Serial.print(", Button2: ");
-  Serial.print(myData.button2);
-  Serial.print(", Button3: ");
-  Serial.println(myData.button3);
+  int vy1Val=map(joystickData.vy1, 0, 4095, -255, 255);
+  int vy2Val=map(joystickData.vy2, 0, 4095, -255, 255);
+  int vy3Val=map(joystickData.vy3, 0, 4095, -255, 255);
+  bool button1State=joystickData.button1;
+  bool button2State=joystickData.button2;
+  bool button3State=joystickData.button3;
 
-  // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
+  Serial.print("Mapped VY1: ");
+  Serial.print(vy1Val);
+  Serial.print(", Mapped VY2: ");
+  Serial.print(vy2Val);
+  Serial.print(", Mapped VY3: ");
+  Serial.println(vy3Val);
+
+  if (button1State == 0) {
+    Serial.println("Button 1 pressed");
+    
+    servo.write(1100); // output to edfs
+    map(abs(vy2Val-1800), 0, 1800, 1100, 1900);
+
+    
+    
+    // output to edfs
+  }
+  
+
+setSpeed(vy1Val, vy2Val);
+
+  
+
+// Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
   // Serial.print(String(encoderValueLeft));
   // Serial.print(", ");
