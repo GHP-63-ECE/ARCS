@@ -4,6 +4,10 @@
 #include <PID.h>
 #include <esp_now.h>
 #include <WiFi.h>
+#include <esp_log.h>
+#include <Adafruit_LSM6DSOX.h>
+#include <Adafruit_LIS3MDL.h>
+
 
 // MARK: Function prototypes 
 // because c++ is a liar
@@ -56,10 +60,13 @@ const int Gantry2 = 26;
 // Extruder Motor Pins
 const int PWM_EXT = 14;
 const int EXT1 = 12;
-const int EXT2 = 13;
+const int EXT2 = 15;
 
 byte servoPin = 13; // signal pin for the ESC.
 Servo servo;
+
+//Acclerometer object declara
+Adafruit_LSM6DSOX lsm6ds;
 
 // MARK: Variables
 
@@ -69,6 +76,8 @@ PID rightDrivePID = PID();
 PID pidControllerGantry = PID();
 
 BluetoothSerial BS;
+
+static const char* TAG = "ARCS-ESP32";
 
 // Drivetrain PID values
 double kP = 0.45;
@@ -128,21 +137,12 @@ struct_message joystickData;
 // Callback function that will be executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&joystickData, incomingData, sizeof(joystickData));
-  Serial.print("Bytes received: ");
-  Serial.println(len);
-  Serial.print("VY1 ");
-  Serial.println(joystickData.vy1);
-  Serial.print("VY2 ");
-  Serial.println(joystickData.vy2);
-  Serial.print("VY3 ");
-  Serial.println(joystickData.vy3);
-  Serial.print("Button1: ");
-  Serial.println(joystickData.button1);
-  Serial.print("Button2: ");
-  Serial.println(joystickData.button2);
-  Serial.print("Button3: ");
-  Serial.println(joystickData.button3);
-  Serial.println();
+  ESP_LOGD(TAG, "VY1: %d", joystickData.vy1);
+  ESP_LOGD(TAG, "VY2: %d", joystickData.vy2);
+  ESP_LOGD(TAG, "VY3: %d", joystickData.vy3);
+  ESP_LOGD(TAG, "Button1: %d", joystickData.button1);
+  ESP_LOGD(TAG, "Button2: %d", joystickData.button2);
+  ESP_LOGD(TAG, "Button3: %d", joystickData.button3);
 }
 
 // MARK: Movement Calculations
@@ -226,18 +226,10 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
     bool leftAtTarget = abs(leftError) <= encoderToleranceTicks;
     bool rightAtTarget = abs(rightError) <= encoderToleranceTicks;
 
-    // Serial.print("Left Error: ");
-    // Serial.print(leftError);
-    // Serial.print(", Right Error: ");
-    // Serial.print(rightError);
-    // Serial.print(", Left Target: ");
-    // Serial.print(targetPositionLeft);   
-    // Serial.print(", Right Target: ");
-    // Serial.print(targetPositionRight);
-    // Serial.print(", Left Current: ");
-    // Serial.print(currentLeft);
-    // Serial.print(", Right Current: ");
-    // Serial.print(currentRight);
+    ESP_LOGD(TAG, "Left Error: %ld", leftError);
+    ESP_LOGD(TAG, "Right Error: %ld", rightError);
+    ESP_LOGD(TAG, "Left Target: %ld", targetPositionLeft);
+    ESP_LOGD(TAG, "Right Target: %ld", targetPositionRight);
 
     if (leftAtTarget && rightAtTarget) {
       stopAllMotors();
@@ -246,7 +238,7 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
 
     if (millis() - startTime > timeoutMs) {
       stopAllMotors();
-      Serial.println("Encoder movement timed out");
+      ESP_LOGW(TAG, "Encoder movement timed out");
       return false;
     }
     
@@ -267,18 +259,15 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
     double leftOutput = leftDrivePID.TotalError();
     double rightOutput = rightDrivePID.TotalError();
 
-    // Serial.print(", Left Output: ");
-    // Serial.print(leftOutput);
-    // Serial.print(", Right Output: ");
-    // Serial.println(rightOutput);
+    ESP_LOGD(TAG, "Left Output: %f", leftOutput);
+    ESP_LOGD(TAG, "Right Output: %f", rightOutput);
 
     int leftSpeed = leftAtTarget ? 0 : pidOutputToSpeed(leftOutput, leftError, maxSpeed);
     int rightSpeed = rightAtTarget ? 0 : pidOutputToSpeed(rightOutput, rightError, maxSpeed);
     if (leftTargetTicks == -rightTargetTicks) {
       // If turning, ensure both motors are moving at the same speed
       setSpeed(leftSpeed, -leftSpeed);
-      Serial.print("Output Speed:");
-      Serial.println(leftSpeed);
+      ESP_LOGD(TAG, "Output Speed: %d", leftSpeed);
     } else {
       setSpeed(leftSpeed, rightSpeed);
     }
@@ -350,12 +339,6 @@ void gantryAlign(float cx){
 void driveToCrackCenter(float cx, float cy) {
   float distance = distanceToCrackCenter(cx, cy);
   float angle = angleToCrackCenter(cx, cy);
-
-  Serial.print("Driving to crack center: distance = ");
-  Serial.print(distance);
-  Serial.print(" mm, angle = ");
-  Serial.print(angle);
-  Serial.println(" degrees");
 
   // Rotate to face the crack center
   turnDegrees(angle, turnSpeed);
@@ -579,7 +562,7 @@ void setup() {
 
   servo.attach(servoPin);
   servo.writeMicroseconds(1500); // send "stop" signal to ESC. Also necessary to arm the ESC.
-  Serial.println("ESC TEST PREP");
+  ESP_LOGI(TAG, "ESC TEST PREP");
   
   leftDrivePID.Init(kP, kI, kD);
   rightDrivePID.Init(kP, kI, kD);
@@ -591,7 +574,7 @@ void setup() {
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
+    ESP_LOGE(TAG, "Error initializing ESP-NOW");
     return;
   }
   
@@ -631,16 +614,23 @@ void loop() {
     edfIncrement=map(joystickData.vy3, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
   }
 
+
   if (escButtonState == 0) {
     edfPower += edfIncrement;
     edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
     
     servo.writeMicroseconds(edfPower); // output to edfs
   }
-  Serial.print(" EDF Increment: ");
-  Serial.print(edfIncrement);
-  Serial.print(" EDF Power: ");
-  Serial.print(edfPower);
+
+  if(button3State == 0){
+    gantryAlign(cx);
+  } 
+
+  if(button2State == 0){
+    setExtruderPower(pwrExt);
+  }
+  ESP_LOGD(TAG, "EDF Increment: %d", edfIncrement);
+  ESP_LOGD(TAG, "EDF Power: %d", edfPower);
   
   setSpeed(leftVal, rightVal);
 
@@ -648,11 +638,7 @@ void loop() {
 
   // driveDistance(700, 255);
 
-  // Serial.print(String(encoderValueLeft));
-  // Serial.print(", ");
-  // Serial.print(String(encoderValueRight));
-  // Serial.print(", ");
-  // Serial.println(String(encoderValueGantry));
+  ESP_LOGD(TAG, "Encoder Values - Left: %ld, Right: %ld, Gantry: %ld", encoderValueLeft, encoderValueRight, encoderValueGantry);
 
   digitalWrite(Gantry1, HIGH);
   digitalWrite(Gantry2, LOW);
@@ -669,7 +655,7 @@ void loop() {
       String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
       cx = xData.toFloat();
       cy = yData.toFloat();
-    Serial.println(rawData);
+      ESP_LOGD(TAG, "Received data - cx: %f, cy: %f", cx, cy);
     }
   }
 
@@ -683,6 +669,7 @@ void loop() {
         delay(500);//time to spray
         setExtruderPower(-pwrExt);
         delay(500);//time to retract
+        ESP_LOGD(TAG, "Drive Aligned");
       } else {
         setExtruderPower(0);
       }
