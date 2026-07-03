@@ -676,6 +676,16 @@ void loop() {
   if(autonomous){
     if(isDriveAligned()){
       gantryAlign(cx);
+      if(isAtTargetPositionGantry()){
+        setExtruderPower(pwrExt);
+        delay(500);//time to extrude
+        setExtruderPower(0);
+        delay(500);//time to spray
+        setExtruderPower(-pwrExt);
+        delay(500);//time to retract
+      } else {
+        setExtruderPower(0);
+      }
     } else {
       driveToCrackCenter(cx, cy);
     }
