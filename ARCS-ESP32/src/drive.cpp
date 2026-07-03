@@ -514,39 +514,27 @@ long encoderEndRight = 0;
 float rpmLeft = 0.0;
 float rpmRight = 0.0;
 int pwmValue = 255;
-int edfSpeed = 0;
+const int edfPowerMin = 1100;
+const int edfPowerMax = 1900;
+int edfPower = edfPowerMin;
+int edfIncrementMax = 5;
 
 void loop() {
 
-  // int vy1Val=map(joystickData.vy1, 0, 4095, -255, 255);
-  // int vy2Val=map(joystickData.vy2, 0, 4095, -255, 255);
-  // int vy3Val=map(joystickData.vy3, 0, 4095, -255, 255);
-  // bool button1State=joystickData.button1;
-  // bool button2State=joystickData.button2;
-  // bool button3State=joystickData.button3;
+  int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
+  int rightVal=map(joystickData.vy2, 0, 4095, -255, 255);
+  int edfIncrement=map(joystickData.vy3, 0, 4095, -edfIncrementMax, edfIncrementMax);
+  bool button1State=joystickData.button1;
+  bool button2State=joystickData.button2;
+  bool escButtonState=joystickData.button3;
 
-  // Serial.print("Mapped VY1: ");
-  // Serial.print(vy1Val);
-  // Serial.print(", Mapped VY2: ");
-  // Serial.print(vy2Val);
-  // Serial.print(", Mapped VY3: ");
-  // Serial.println(vy3Val);
-
-  // if (button1State == 0) {
-  //   Serial.println("Button 1 pressed");
-    
-  //   servo.write(1100); // output to edfs
-  //   map(abs(vy2Val-1800), 0, 1800, 1100, 1900);
-
-    
-    
-  //   // output to edfs
-  // }
+  if (escButtonState == 0) {
+    edfPower += edfIncrement;
+    edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
+    servo.writeMicroseconds(edfPower); // output to edfs
+  }
   
-
-  // setSpeed(vy1Val, vy2Val);
-
-  
+  setSpeed(leftVal, rightVal);
 
   // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
