@@ -68,11 +68,11 @@ volatile long encoderValueRight = 0;
 
 int powerValue = 1100;
 
-const float wheelDiameter = 44.0; // mm
+const float wheelDiameter = 45.0; // mm
 const long ticksPerRotation = 7*298; 
 const float wheelCircumference = wheelDiameter * PI;
-const float trackWidth = 330.0; // mm - TODO
-const float turnSlipCompensation = 1.64; // This is a fudge factor to account for the fact that the robot doesn't turn perfectly in place
+const float trackWidth = 420; // mm - TODO
+const float turnSlipCompensation = 1.0; // This is a fudge factor to account for the fact that the robot doesn't turn perfectly in place
 const float movementSpeed = 128.0; // Speed for driving forward/backward (0-255)
 const float rpmAtMaxSpeed = 100; // Maximum RPM of the motor at full speed - TODO
 const float turnSpeed = 178.0; // Speed for turning left/right (0-255) - TODO
@@ -518,43 +518,43 @@ int edfSpeed = 0;
 
 void loop() {
 
-  int vy1Val=map(joystickData.vy1, 0, 4095, -255, 255);
-  int vy2Val=map(joystickData.vy2, 0, 4095, -255, 255);
-  int vy3Val=map(joystickData.vy3, 0, 4095, -255, 255);
-  bool button1State=joystickData.button1;
-  bool button2State=joystickData.button2;
-  bool button3State=joystickData.button3;
+  // int vy1Val=map(joystickData.vy1, 0, 4095, -255, 255);
+  // int vy2Val=map(joystickData.vy2, 0, 4095, -255, 255);
+  // int vy3Val=map(joystickData.vy3, 0, 4095, -255, 255);
+  // bool button1State=joystickData.button1;
+  // bool button2State=joystickData.button2;
+  // bool button3State=joystickData.button3;
 
-  Serial.print("Mapped VY1: ");
-  Serial.print(vy1Val);
-  Serial.print(", Mapped VY2: ");
-  Serial.print(vy2Val);
-  Serial.print(", Mapped VY3: ");
-  Serial.println(vy3Val);
+  // Serial.print("Mapped VY1: ");
+  // Serial.print(vy1Val);
+  // Serial.print(", Mapped VY2: ");
+  // Serial.print(vy2Val);
+  // Serial.print(", Mapped VY3: ");
+  // Serial.println(vy3Val);
 
-  if (button1State == 0) {
-    Serial.println("Button 1 pressed");
+  // if (button1State == 0) {
+  //   Serial.println("Button 1 pressed");
     
-    servo.write(1100); // output to edfs
-    map(abs(vy2Val-1800), 0, 1800, 1100, 1900);
+  //   servo.write(1100); // output to edfs
+  //   map(abs(vy2Val-1800), 0, 1800, 1100, 1900);
 
     
     
-    // output to edfs
-  }
+  //   // output to edfs
+  // }
   
 
-setSpeed(vy1Val, vy2Val);
+  // setSpeed(vy1Val, vy2Val);
 
   
 
-// Serial.println(encoderValueLeft + " hello " + encoderValueRight);
+  // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
   // Serial.print(String(encoderValueLeft));
   // Serial.print(", ");
   // Serial.println(String(encoderValueRight));
 
-  // driveDistance(44 * 2 * PI, 255);
+  driveDistance(700, 255);
 
   // turnDegrees(180 , 200);
   // turnDegrees2(90);
@@ -585,7 +585,7 @@ setSpeed(vy1Val, vy2Val);
   // left();
   while (true) {}
 
-  // Serial.print(String(digitalRead(ENCAFR)));
+  // Serial.print(String((ENCAFR)));
   // Serial.print(", ");
   // Serial.print(String(digitalRead(ENCBFR)));
   // Serial.print(", ");
