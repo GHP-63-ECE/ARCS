@@ -9,7 +9,7 @@
 
 BluetoothSerial BS;
 
-// Adafruit_MPU6050 imu;
+Adafruit_MPU6050 imu;
 
 float gyroX = 0;
 float gyroY = 0;
@@ -52,9 +52,9 @@ void forwards();
 void backwards();
 void left();
 void right();
-void setExtrusionPower(int power);
+void setGantryPower(int power);
 void updateEncoderGantry();
-void setExtrusionPosition(int targetPos);
+void setGantryPosition(int targetPos);
 
 //Raspberry Pi communication Pin Definitions
 //#define RXD2 16  // GPIO16 as RX
@@ -65,8 +65,12 @@ void setExtrusionPosition(int targetPos);
 // Motor Pins
 // Left
 const int PWML = 23;
-const int L1 = 22;
-const int L2 = 21;
+const int L1 = 16;
+const int L2 = 17;  
+// const int L1 = 22;
+// const int L2 = 21;
+
+
 
 // Right
 const int PWMR = 19;
@@ -92,9 +96,18 @@ const int ENCEXTA = 36;
 /**@brief 2nd Encoder Pin for Extruder */
 const int ENCEXTB = 39;
 
+//Gantry Motor Pins
+const int ENI = 25;
 const int PWM_PIN1 = 27;
-const int ENI = 14;
 const int PWM_PIN2 = 26; 
+
+//Extruder Motor Pins
+const int PWM_EXT = 14;
+const int EXT1 = 12;
+const int EXT2 = 13;
+
+int cx = 0;
+int cy = 0;
 
 
 volatile long encoderValueLeft = 0;
@@ -107,14 +120,16 @@ const float wheelDiameter = 44.0; // mm
 const long ticksPerRotation = 7*298; 
 const float wheelCircumference = wheelDiameter * PI;
 const float trackWidth = 150.0; // mm - TODO
-const float movementSpeed = 128.0; // Speed for driving forward/backward (0-255)
+int movementSpeed = 128; // Speed for driving forward/backward (0-255)
 const float rpmAtMaxSpeed = 100; // Maximum RPM of the motor at full speed - TODO
 const float turnSpeed = 128.0; // Speed for turning left/right (0-255) - TODO
 
 const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
-const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
+const float cameraFOVHeightMM = 56.0; // Height of the camera's field of view in millimeters - TODO
 
-int pwr = 100;
+int pwrGantry = 100;
+int pwrExt = 100;
+
 
 // MARK: Movement Calculations
 
@@ -150,11 +165,12 @@ void rotateDegreesWithoutEncoders(float degrees, int speed) {
   stopAllMotors();
 }
 
+
 // Calculating distance to the center of a crack based on normalized coordinates (cx, cy) of the crack in the camera's field of view
 float distanceToCrackCenter(float cx, float cy) {
   // Convert normalized pixel coordinates to millimeters
-  float x_mm = (cx - 0.5) * cameraFOVWidthMM;
-  float y_mm = (cy - 0.5) * cameraFOVHeightMM;
+  float x_mm = ((cx - 0.5) * cameraFOVWidthMM)+100;
+  float y_mm = ((cy - 0.5) * cameraFOVHeightMM)+180;
 
   // Calculate distance to the center of the crack using Pythagorean theorem
   return sqrt(x_mm * x_mm + y_mm * y_mm);
@@ -162,11 +178,23 @@ float distanceToCrackCenter(float cx, float cy) {
 
 float angleToCrackCenter(float cx, float cy) {
   // Convert normalized pixel coordinates to millimeters
-  float x_mm = (cx - 0.5) * cameraFOVWidthMM;
-  float y_mm = (cy - 0.5) * cameraFOVHeightMM;
+  float x_mm = ((cx - 0.5) * cameraFOVWidthMM)+100;
+  float y_mm = ((cy - 0.5) * cameraFOVHeightMM)+180;
 
   // Calculate angle to the center of the crack using arctangent
   return atan2(x_mm, -y_mm) * (180 / PI); // atan2 is flipped so that 0 degrees is forward and positive angles are to the right
+}
+
+void gantryAlign(float cx){
+  
+  // Convert normalized pixel coordinates to millimeters
+  float x_mm = ((cx - 0.5) * cameraFOVWidthMM)+100;
+
+  // Calculate the distance to move the gantry based on the x_mm value
+  float distanceToMove = x_mm; // Assuming 1:1 mapping for simplicity, adjust as necessary
+
+  // Move the gantry to align with the crack center
+  setGantryPosition(distanceToMove);
 }
 
 // Drives to the crack's center such that the crack is centered in the camera's field of view at (0.5, 0.5) 
@@ -203,12 +231,16 @@ void setup() {
   pinMode(PWM_PIN2, OUTPUT);
   pinMode(ENI, OUTPUT);
 
-    //   if(!imu.begin()){
-    //     Serial.print("IMU not found");
-    // }
+  pinMode(PWM_EXT, OUTPUT);
+  pinMode(EXT1, OUTPUT);
+  pinMode(EXT2, OUTPUT);
 
-    // imu.setAccelerometerRange(MPU6050_RANGE_2_G);
-    // imu.setGyroRange(MPU6050_RANGE_2000_DEG);
+      if(!imu.begin()){
+        Serial.print("IMU not found");
+    }
+
+    imu.setAccelerometerRange(MPU6050_RANGE_2_G);
+    imu.setGyroRange(MPU6050_RANGE_2000_DEG);
 
   // Set encoder pins to interrupts
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
@@ -220,6 +252,12 @@ void setup() {
   pidController.Init(kP, kI, kD);
   pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
   // Turn off motors initially
+
+  servo.attach(servoPin);
+  servo.writeMicroseconds(1500); // send "stop" signal to ESC. Also necessary to arm the ESC.
+  Serial.println("ESC TEST PREP");
+
+
   stopAllMotors();
 }
 
@@ -238,6 +276,23 @@ void loop() {
   digitalWrite(PWM_PIN2, LOW);
   analogWrite(ENI, 100);
 
+  if (BS.available() > 0) {
+    String rawData = Serial.readStringUntil('\n');
+    rawData.trim();
+    if (rawData.length() > 0) {
+      int cxIndex = rawData.indexOf("cx");
+      int cyIndex = rawData.indexOf("cy");
+      int xIndex = rawData.indexOf("x1");
+      String xData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
+      String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
+      cx = xData.toFloat();
+      cy = yData.toFloat();
+    Serial.println(rawData);
+    }
+    
+    
+  }
+
   // Serial.print(String(digitalRead(ENCAFR)));
   // Serial.print(", ");
   // Serial.print(String(digitalRead(ENCBFR)));
@@ -247,88 +302,120 @@ void loop() {
   // Serial.println(String(digitalRead(ENCBFL)));
 
 
-    if (BS.available() > 0) {
-    char dataFromPi = BS.read();
-       switch(dataFromPi) {
-      case 'w':
-        forwards();
-        BS.print('w');
-        break;
-      case 's':
-        backwards();
-        BS.print('s');
-        break;
-      case 'a':
-        left();
-        BS.print('a');
-        break;
-      case 'd':
-        right();
-        BS.print('d');
-        break;
-      case ' ':
-        stopAllMotors();
-        BS.print("Stop");
-        break;
+    // if (BS.available() > 0) {
+    // char dataFromPi = BS.read();
+    //    switch(dataFromPi) {
+    //   case 'w':
+    //     forwards();
+    //     BS.print('w');
+    //     break;
+    //   case 's':
+    //     backwards();
+    //     BS.print('s');
+    //     break;
+    //   case 'a':
+    //     left();
+    //     BS.print('a');
+    //     break;
+    //   case 'd':
+    //     right();
+    //     BS.print('d');
+    //     break;
+    //   case ' ':
+    //     stopAllMotors();
+    //     BS.print("FUCK! Stop");
+    //     break;
 
-      case '+':
-        powerValue += 100;
-        BS.println(powerValue);
-        break;
-      case '-':
-        powerValue -= 100;
-        BS.println(powerValue);
-        break;
-      case 'k':
-        powerValue = 0;
-        BS.println(powerValue);
-        break;
-      
-      case 'l':
-        setExtrusionPower(pwr);
-        BS.println("Extruder Forward");
-        break;
-      case 'r':
-        setExtrusionPower(-pwr);
-        BS.println("Extruder Backward");
-        break;
-      case 'e':
-        setExtrusionPower(0);
-        BS.println("Extruder Stop");
-        break;
-      case 'p':
-        pwr += 10;
-        if (pwr > 255) pwr = 255;
-        BS.println("Power: " + String(pwr));
-        break;
-      case 'm':
-        pwr -= 10;
-        if (pwr < 0) pwr = 0;
-        BS.println("Power: " + String(pwr));
-        break;
-      default:
-        BS.println("Unknown command received: " + dataFromPi);
-        break;
-    }
-    int pwmVal = map(powerValue,0, 1023, 1100, 1900); // translate POT values to ESC value.
-    float percentVal = ((pwmVal - 1100) / 8);
-    servo.writeMicroseconds(pwmVal);
-    }
+    //   case '+':
+    //     powerValue += 100;
+    //     BS.println(powerValue);
+    //     break;
+    //   case '-':
+    //     powerValue -= 100;
+    //     BS.println(powerValue);
+    //     break;
+    //   case 'k':
+    //     powerValue = 0;
+    //     BS.println(powerValue);
+    //     break;
+    //   case 'l':
+    //     setGantryPower(pwrGantry);
+    //     BS.println("Gantry Forward");
+    //     break;
+    //   case 'r':
+    //     setGantryPower(-pwrGantry);
+    //     BS.println("Gantry Backward");
+    //     break;
+    //   case 'e':
+    //     setGantryPower(0);
+    //     BS.println("Gantry Stop");
+    //     break;
+    //   case 'p':
+    //     pwrGantry += 10;
+    //     if (pwrGantry > 255) pwrGantry = 255;
+    //     BS.println("Power: " + String(pwrGantry));
+    //     break;
+    //   case 'm':
+    //     pwrGantry -= 10;
+    //     if (pwrGantry < 0) pwrGantry = 0;
+    //     BS.println("Power: " + String(pwrGantry));
+    //     break;
+    //   case 'v':
+    //    movementSpeed += 10;
+    //    if (movementSpeed > 255) movementSpeed = 255;
+    //    BS.println("Drive Speed: " + String(movementSpeed));
+    //   break;
+    //   case 'b':
+    //     movementSpeed -= 10;
+    //       if (movementSpeed < 0) movementSpeed = 0;
+    //     BS.println("Drive Speed: " + String(movementSpeed));
+    //   break;
+    //   case 'y':
+    //   driveToCrackCenter(0.6, 0.5); // Example coordinates for the crack center
+    //   BS.println("Driving to Crack Center, godspeed");
+    //   break;
+    //   case 'g':
+    //     gantryAlign(0.6); // Example x-coordinate for the crack center
+    //     BS.println("Aligning Gantry to Crack Center");
+    //     break;
+    //   default:
+    //     BS.println("Unknown command received: " + dataFromPi);
+    //     break;
+    // }
+    // int pwmVal = map(powerValue,0, 1023, 1100, 1900); // translate POT values to ESC value.
+    // float percentVal = ((pwmVal - 1100) / 8);
+    // servo.writeMicroseconds(pwmVal);
+    // delay(50);
+    // }
 
-    // sensors_event_t accel, gyro, temp;
-    // imu.getEvent(&accel, &gyro, &temp);
+    sensors_event_t accel, gyro, temp;
+    imu.getEvent(&accel, &gyro, &temp);
 
-    // accelX = accel.acceleration.x - 0.4;
-    // accelY = accel.acceleration.y + 0.1;
-    // accelZ = accel.acceleration.z - 0.84;
+    accelX = accel.acceleration.x - 0.4;
+    accelY = accel.acceleration.y + 0.1;
+    accelZ = accel.acceleration.z - 0.84;
 
-    // Serial.print("Accel X:");
-    // Serial.print(accelX);
-    // Serial.print(", Y:");
-    // Serial.print(accelY);
-    // Serial.print(", Z:");
-    // Serial.print(accelZ);
-    // Serial.print("m/s^2 ");
+    Serial.print("Accel X:");
+    Serial.print(accelX);
+    Serial.print(", Y:");
+    Serial.print(accelY);
+    Serial.print(", Z:");
+    Serial.print(accelZ);
+    Serial.print("m/s^2 ");
+
+    gyroX += gyro.gyro.x*0.01;
+    gyroY += gyro.gyro.y*0.01;
+    gyroZ += gyro.gyro.z*0.01;
+
+    Serial.print("Gyro X:");
+    Serial.print(gyroX);
+    Serial.print(", Y:");
+    Serial.print(gyroY);
+    Serial.print(", Z:");
+    Serial.print(gyroZ);
+    Serial.println("rad");
+
+    delay(10);
   }
 
 
@@ -409,37 +496,37 @@ void setSpeed(int left, int right){
   analogWrite(PWMR, right);
 }
 
-// MARK: Extruder Functions
+// MARK: Gantry Functions
 
-void extDirectionForward() {
+void gantryDirectionForward() {
   digitalWrite(PWM_PIN1, HIGH);
   digitalWrite(PWM_PIN2, LOW);
 }
 
-void extDirectionBackward() {
+void gantryDirectionBackward() {
   digitalWrite(PWM_PIN1, LOW);
   digitalWrite(PWM_PIN2, HIGH);
 }
 
-void stopExtruder() {
+void stopGantry() {
   digitalWrite(PWM_PIN1, LOW);
   digitalWrite(PWM_PIN2, LOW);
   analogWrite(ENI, 0);
 }
 
-void setExtrusionPower(int power) {
+void setGantryPower(int power) {
   if (power == 0) {
-    stopExtruder();
+    stopGantry();
   } else if (power < 0) {
     power = -power;
-    extDirectionBackward();
+    gantryDirectionBackward();
   } else {
-    extDirectionForward();
+    gantryDirectionForward();
   }
   analogWrite(ENI, power);
 }
 
-void setExtrusionPosition(int targetPos) {
+void setGantryPosition(int targetPos) {
     int error = targetPos - encoderValueGantry;
     targetPositionGantry = targetPos;
 
@@ -448,7 +535,41 @@ void setExtrusionPosition(int targetPos) {
     analogWrite(ENI, pidControllerGantry.p_error*kP_gantry + pidControllerGantry.i_error*kI_gantry + pidControllerGantry.d_error*kD_gantry);    
 }
 
+bool isAtTargetPositionGantry() {
+    return abs(targetPositionGantry - encoderValueGantry) < 5;
+}
+
+
+
 // MARK: Encoder Functions
+
+void extDirectionForward() {
+  digitalWrite(EXT1, HIGH);
+  digitalWrite(EXT2, LOW);
+}
+
+void extDirectionBackward() {
+  digitalWrite(EXT1, LOW);
+  digitalWrite(EXT2, HIGH);
+}
+
+void stopExtruder() {
+  digitalWrite(EXT1, LOW);
+  digitalWrite(EXT2, LOW);
+  analogWrite(PWM_EXT, 0);
+}
+
+void setExtruderPower(int power) {
+  if (power == 0) {
+    stopExtruder();
+  } else if (power < 0) {
+    power = -power;
+    extDirectionBackward();
+  } else {
+    extDirectionForward();
+  }
+  analogWrite(PWM_EXT, power);
+}
 
 void updateEncoderLeft(){
   if (digitalRead(ENCAFL) > digitalRead(ENCBFL))
