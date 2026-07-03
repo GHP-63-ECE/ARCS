@@ -289,105 +289,7 @@ void loop() {
       cy = yData.toFloat();
     Serial.println(rawData);
     }
-    
-    
-  }
-
-  // Serial.print(String(digitalRead(ENCAFR)));
-  // Serial.print(", ");
-  // Serial.print(String(digitalRead(ENCBFR)));
-  // Serial.print(", ");
-  // Serial.print(String(digitalRead(ENCAFL)));
-  // Serial.print(", ");
-  // Serial.println(String(digitalRead(ENCBFL)));
-
-
-    // if (BS.available() > 0) {
-    // char dataFromPi = BS.read();
-    //    switch(dataFromPi) {
-    //   case 'w':
-    //     forwards();
-    //     BS.print('w');
-    //     break;
-    //   case 's':
-    //     backwards();
-    //     BS.print('s');
-    //     break;
-    //   case 'a':
-    //     left();
-    //     BS.print('a');
-    //     break;
-    //   case 'd':
-    //     right();
-    //     BS.print('d');
-    //     break;
-    //   case ' ':
-    //     stopAllMotors();
-    //     BS.print("FUCK! Stop");
-    //     break;
-
-    //   case '+':
-    //     powerValue += 100;
-    //     BS.println(powerValue);
-    //     break;
-    //   case '-':
-    //     powerValue -= 100;
-    //     BS.println(powerValue);
-    //     break;
-    //   case 'k':
-    //     powerValue = 0;
-    //     BS.println(powerValue);
-    //     break;
-    //   case 'l':
-    //     setGantryPower(pwrGantry);
-    //     BS.println("Gantry Forward");
-    //     break;
-    //   case 'r':
-    //     setGantryPower(-pwrGantry);
-    //     BS.println("Gantry Backward");
-    //     break;
-    //   case 'e':
-    //     setGantryPower(0);
-    //     BS.println("Gantry Stop");
-    //     break;
-    //   case 'p':
-    //     pwrGantry += 10;
-    //     if (pwrGantry > 255) pwrGantry = 255;
-    //     BS.println("Power: " + String(pwrGantry));
-    //     break;
-    //   case 'm':
-    //     pwrGantry -= 10;
-    //     if (pwrGantry < 0) pwrGantry = 0;
-    //     BS.println("Power: " + String(pwrGantry));
-    //     break;
-    //   case 'v':
-    //    movementSpeed += 10;
-    //    if (movementSpeed > 255) movementSpeed = 255;
-    //    BS.println("Drive Speed: " + String(movementSpeed));
-    //   break;
-    //   case 'b':
-    //     movementSpeed -= 10;
-    //       if (movementSpeed < 0) movementSpeed = 0;
-    //     BS.println("Drive Speed: " + String(movementSpeed));
-    //   break;
-    //   case 'y':
-    //   driveToCrackCenter(0.6, 0.5); // Example coordinates for the crack center
-    //   BS.println("Driving to Crack Center, godspeed");
-    //   break;
-    //   case 'g':
-    //     gantryAlign(0.6); // Example x-coordinate for the crack center
-    //     BS.println("Aligning Gantry to Crack Center");
-    //     break;
-    //   default:
-    //     BS.println("Unknown command received: " + dataFromPi);
-    //     break;
-    // }
-    // int pwmVal = map(powerValue,0, 1023, 1100, 1900); // translate POT values to ESC value.
-    // float percentVal = ((pwmVal - 1100) / 8);
-    // servo.writeMicroseconds(pwmVal);
-    // delay(50);
-    // }
-
+  
     sensors_event_t accel, gyro, temp;
     imu.getEvent(&accel, &gyro, &temp);
 
@@ -417,6 +319,7 @@ void loop() {
 
     delay(10);
   }
+}
 
 
 // MARK: Movement Functions
