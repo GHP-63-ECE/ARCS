@@ -121,6 +121,8 @@ const int EXT2 = 13;
 int cx = 0;
 int cy = 0;
 
+bool autonomous = false;
+
 
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
@@ -383,6 +385,18 @@ float angleToCrackCenter(float cx, float cy) {
   // Calculate angle to the center of the crack using arctangent
   return atan2(x_mm, -y_mm) * (180 / PI); // atan2 is flipped so that 0 degrees is forward and positive angles are to the right
 }
+
+ bool isDriveAligned(){
+  float distance = distanceToCrackCenter(cx, cy);
+  float angle = angleToCrackCenter(cx, cy);
+
+  // Define thresholds for alignment
+  const float distanceThreshold = 50; // mm
+  const float angleThreshold = 5.0; // degrees
+
+  // Check if the robot is aligned with the crack center
+  return (abs(distance) < distanceThreshold) && (abs(angle) < angleThreshold);
+ }
 
 void gantryAlign(float cx){
   
@@ -757,6 +771,14 @@ void loop() {
       cx = xData.toFloat();
       cy = yData.toFloat();
     Serial.println(rawData);
+    }
+  }
+
+  if(autonomous){
+    if(isDriveAligned()){
+      gantryAlign(cx);
+    } else {
+      driveToCrackCenter(cx, cy);
     }
   }
 
