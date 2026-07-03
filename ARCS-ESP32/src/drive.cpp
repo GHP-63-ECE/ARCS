@@ -514,25 +514,39 @@ long encoderEndRight = 0;
 float rpmLeft = 0.0;
 float rpmRight = 0.0;
 int pwmValue = 255;
-const int edfPowerMin = 1100;
-const int edfPowerMax = 1900;
+
+const int edfPowerMin = 500;
+const int edfPowerMax = 2400;
+const int edfJoystickDefault = 1950;
 int edfPower = edfPowerMin;
 int edfIncrementMax = 5;
+int edfIncrement = 0;
 
 void loop() {
 
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
   int rightVal=map(joystickData.vy2, 0, 4095, -255, 255);
-  int edfIncrement=map(joystickData.vy3, 0, 4095, -edfIncrementMax, edfIncrementMax);
-  bool button1State=joystickData.button1;
+  bool button3State=joystickData.button3;
   bool button2State=joystickData.button2;
-  bool escButtonState=joystickData.button3;
+  bool escButtonState=joystickData.button1;
+
+  edfIncrement = 0;
+  if (joystickData.vy3 < edfJoystickDefault) {
+    edfIncrement=map(joystickData.vy3, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
+  } else {
+    edfIncrement=map(joystickData.vy3, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
+  }
 
   if (escButtonState == 0) {
     edfPower += edfIncrement;
     edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
+    
     servo.writeMicroseconds(edfPower); // output to edfs
   }
+  Serial.print(" EDF Increment: ");
+  Serial.print(edfIncrement);
+  Serial.print(" EDF Power: ");
+  Serial.print(edfPower);
   
   setSpeed(leftVal, rightVal);
 
