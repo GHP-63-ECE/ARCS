@@ -42,8 +42,8 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
 // Motor Pins
 // Left
 const int PWML = 23;
-const int L1 = 22;
-const int L2 = 21;
+const int L1 = 22; // Switch to 12
+const int L2 = 21; // Switch to 14
 
 // Right
 const int PWMR = 19;
