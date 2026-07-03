@@ -1,6 +1,10 @@
 
 #include <Arduino.h>
 #include <ESP32Servo.h> // ONLY LIBRARY NECESARY FOR ESC 
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_MPU6050.h>
+#include <BluetoothSerial.h>
 #include <PID.h>
 #include <esp_now.h>
 #include <WiFi.h>
@@ -9,11 +13,39 @@
 PID pidController = PID();
 PID leftDrivePID = PID();
 PID rightDrivePID = PID();
+PID pidControllerGantry = PID();
 
+BluetoothSerial BS;
+
+Adafruit_MPU6050 imu;
+
+float gyroX = 0;
+float gyroY = 0;
+float gyroZ = 0;
+
+float accelX;
+float accelY;
+float accelZ;
+
+double gyroX_offset = 0, gyroY_offset = 0, gyroZ_offset = 0;
+double accelX_offset = 0, accelY_offset = 0, accelZ_offset = 0;
+double raw_ax, raw_ay, raw_az;
+double raw_gx, raw_gy, raw_gz;
+double gyroX_offset_rad, gyroY_offset_rad, gyroZ_offset_rad;
+
+const int numSamples = 2000; // Number of readings to average
+
+
+
+
+// Drivetrain PID values
 double kP = 0.45;
 double kI = 0.0035; 
 double kD = 0.0;
 
+double kP_gantry = 0.1;
+double kI_gantry = 0;
+double kD_gantry = 0;
 // Function prototypes because c++ is a liar
 void stopAllMotors();
 void directionForward();
@@ -32,6 +64,9 @@ long readEncoderRight();
 long distanceToEncoderTicks(float distanceMm);
 int pidOutputToSpeed(double output, long error, int maxSpeed);
 bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed);
+void setGantryPower(int power);
+void updateEncoderGantry();
+void setGantryPosition(int targetPos);
 
 //Raspberry Pi communication Pin Definitions
 //#define RXD2 16  // GPIO16 as RX
@@ -42,16 +77,21 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
 // Motor Pins
 // Left
 const int PWML = 23;
-const int L1 = 22;
-const int L2 = 21;
+const int L1 = 16;
+const int L2 = 17;  
+// const int L1 = 22;
+// const int L2 = 21;
+
+
 
 // Right
 const int PWMR = 19;
 const int R1 = 18;
 const int R2 = 5;
 
-long targetPositionRight;
-long targetPositionLeft;
+int targetPositionRight;
+int targetPositionLeft;
+int targetPositionGantry;
 
 byte servoPin = 13; // signal pin for the ESC.
 Servo servo;
@@ -63,17 +103,37 @@ const int ENCBFL = 26; // Encoder B pin for Front Left Motor
 const int ENCAFR = 33; // Encoder A pin for Front Right Motor
 const int ENCBFR = 25; // Encoder B pin for Front Right Motor
 
+/**@brief 1st Encoder Pin for Extruder */
+const int ENCEXTA = 36;
+/**@brief 2nd Encoder Pin for Extruder */
+const int ENCEXTB = 39;
+
+//Gantry Motor Pins
+const int ENI = 25;
+const int PWM_PIN1 = 27;
+const int PWM_PIN2 = 26; 
+
+//Extruder Motor Pins
+const int PWM_EXT = 14;
+const int EXT1 = 12;
+const int EXT2 = 13;
+
+int cx = 0;
+int cy = 0;
+
+
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
+volatile long encoderValueGantry = 0;
 
 int powerValue = 1100;
 
 const float wheelDiameter = 45.0; // mm
 const long ticksPerRotation = 7*298; 
 const float wheelCircumference = wheelDiameter * PI;
-const float trackWidth = 420; // mm - TODO
 const float turnSlipCompensation = 1.0; // This is a fudge factor to account for the fact that the robot doesn't turn perfectly in place
-const float movementSpeed = 128.0; // Speed for driving forward/backward (0-255)
+const float trackWidth = 150.0; // mm - TODO
+int movementSpeed = 128; // Speed for driving forward/backward (0-255)
 const float rpmAtMaxSpeed = 100; // Maximum RPM of the motor at full speed - TODO
 const float turnSpeed = 178.0; // Speed for turning left/right (0-255) - TODO
 const float DISTANCE_PER_TICK = (PI * wheelDiameter) / ticksPerRotation; // mm per encoder tick
@@ -82,7 +142,11 @@ const int minimumPIDSpeed = 55;
 const unsigned long movementLoopDelayMs = 10;
 
 const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
-const float cameraFOVHeightMM = 75.0; // Height of the camera's field of view in millimeters - TODO
+const float cameraFOVHeightMM = 56.0; // Height of the camera's field of view in millimeters - TODO
+
+int pwrGantry = 100;
+int pwrExt = 100;
+
 
 
 // MARK: ESP-NOW Comms
@@ -320,6 +384,18 @@ float angleToCrackCenter(float cx, float cy) {
   return atan2(x_mm, -y_mm) * (180 / PI); // atan2 is flipped so that 0 degrees is forward and positive angles are to the right
 }
 
+void gantryAlign(float cx){
+  
+  // Convert normalized pixel coordinates to millimeters
+  float x_mm = ((cx - 0.5) * cameraFOVWidthMM)+100;
+
+  // Calculate the distance to move the gantry based on the x_mm value
+  float distanceToMove = x_mm; // Assuming 1:1 mapping for simplicity, adjust as necessary
+
+  // Move the gantry to align with the crack center
+  setGantryPosition(distanceToMove);
+}
+
 // Drives to the crack's center such that the crack is centered in the camera's field of view at (0.5, 0.5) 
 void driveToCrackCenter(float cx, float cy) {
   float distance = distanceToCrackCenter(cx, cy);
@@ -337,6 +413,8 @@ void driveToCrackCenter(float cx, float cy) {
   // Drive forward to the crack center
   driveDistance(distance, movementSpeed);
 }
+
+
 
 // MARK: Movement Functions
 
@@ -415,7 +493,80 @@ void setSpeed(int left, int right){
   analogWrite(PWMR, right);
 }
 
-// MARK: Encoder Updating
+// MARK: Gantry Functions
+
+void gantryDirectionForward() {
+  digitalWrite(PWM_PIN1, HIGH);
+  digitalWrite(PWM_PIN2, LOW);
+}
+
+void gantryDirectionBackward() {
+  digitalWrite(PWM_PIN1, LOW);
+  digitalWrite(PWM_PIN2, HIGH);
+}
+
+void stopGantry() {
+  digitalWrite(PWM_PIN1, LOW);
+  digitalWrite(PWM_PIN2, LOW);
+  analogWrite(ENI, 0);
+}
+
+void setGantryPower(int power) {
+  if (power == 0) {
+    stopGantry();
+  } else if (power < 0) {
+    power = -power;
+    gantryDirectionBackward();
+  } else {
+    gantryDirectionForward();
+  }
+  analogWrite(ENI, power);
+}
+
+void setGantryPosition(int targetPos) {
+    int error = targetPos - encoderValueGantry;
+    targetPositionGantry = targetPos;
+
+    pidControllerGantry.UpdateError(error);
+
+    analogWrite(ENI, pidControllerGantry.p_error*kP_gantry + pidControllerGantry.i_error*kI_gantry + pidControllerGantry.d_error*kD_gantry);    
+}
+
+bool isAtTargetPositionGantry() {
+    return abs(targetPositionGantry - encoderValueGantry) < 5;
+}
+
+
+
+// MARK: Encoder Functions
+
+void extDirectionForward() {
+  digitalWrite(EXT1, HIGH);
+  digitalWrite(EXT2, LOW);
+}
+
+void extDirectionBackward() {
+  digitalWrite(EXT1, LOW);
+  digitalWrite(EXT2, HIGH);
+}
+
+void stopExtruder() {
+  digitalWrite(EXT1, LOW);
+  digitalWrite(EXT2, LOW);
+  analogWrite(PWM_EXT, 0);
+}
+
+void setExtruderPower(int power) {
+  if (power == 0) {
+    stopExtruder();
+  } else if (power < 0) {
+    power = -power;
+    extDirectionBackward();
+  } else {
+    extDirectionForward();
+  }
+  analogWrite(PWM_EXT, power);
+}
 
 void updateEncoderLeft(){
   if (digitalRead(ENCAFL) > digitalRead(ENCBFL))
@@ -430,6 +581,15 @@ void updateEncoderRight(){
   else
     encoderValueRight--;
 }
+
+void updateEncoderGantry(){
+  if (digitalRead(ENCEXTA) > digitalRead(ENCEXTB))
+    encoderValueGantry++;
+  else
+    encoderValueGantry--;
+}
+
+
 
 // MARK: PID Functions
 
@@ -460,10 +620,10 @@ bool isAtTargetPositionRight() {
 }
 
 // MARK: Setup
-
 void setup() {
 
   Serial.begin(115200);
+  BS.begin("ARCS");
 
   // Set all control pins to outputs
 
@@ -476,6 +636,14 @@ void setup() {
   pinMode(R1, OUTPUT);
   pinMode(R2, OUTPUT);
 
+  pinMode(PWM_PIN1, OUTPUT);
+  pinMode(PWM_PIN2, OUTPUT);
+  pinMode(ENI, OUTPUT);
+
+  pinMode(PWM_EXT, OUTPUT);
+  pinMode(EXT1, OUTPUT);
+  pinMode(EXT2, OUTPUT);
+
   pinMode(ENCAFL, INPUT);
   pinMode(ENCBFL, INPUT);
   pinMode(ENCAFR, INPUT);
@@ -485,8 +653,17 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
 
   attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
+
+  attachInterrupt(digitalPinToInterrupt(ENCEXTA), updateEncoderGantry, RISING);
   
   pidController.Init(kP, kI, kD);
+  pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
+  // Turn off motors initially
+
+  servo.attach(servoPin);
+  servo.writeMicroseconds(1500); // send "stop" signal to ESC. Also necessary to arm the ESC.
+  Serial.println("ESC TEST PREP");
+  
   leftDrivePID.Init(kP, kI, kD);
   rightDrivePID.Init(kP, kI, kD);
   // Turn off motors initially
@@ -544,6 +721,31 @@ void loop() {
 
   driveDistance(700, 255);
 
+  Serial.print(String(encoderValueLeft));
+  Serial.print(", ");
+  Serial.print(String(encoderValueRight));
+  Serial.print(", ");
+  Serial.println(String(encoderValueGantry));
+
+  digitalWrite(PWM_PIN1, HIGH);
+  digitalWrite(PWM_PIN2, LOW);
+  analogWrite(ENI, 100);
+
+  if (BS.available() > 0) {
+    String rawData = Serial.readStringUntil('\n');
+    rawData.trim();
+    if (rawData.length() > 0) {
+      int cxIndex = rawData.indexOf("cx");
+      int cyIndex = rawData.indexOf("cy");
+      int xIndex = rawData.indexOf("x1");
+      String xData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
+      String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
+      cx = xData.toFloat();
+      cy = yData.toFloat();
+    Serial.println(rawData);
+    }
+  }
+
   // turnDegrees(180 , 200);
   // turnDegrees2(90);
 
@@ -571,7 +773,7 @@ void loop() {
 
 
   // left();
-  while (true) {}
+  // while (true) {}
 
   // Serial.print(String((ENCAFR)));
   // Serial.print(", ");
