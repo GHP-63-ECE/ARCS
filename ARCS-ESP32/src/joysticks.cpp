@@ -2,6 +2,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
+#include <ESP32Servo.h>
+
 
 // Replace with the receiver's MAC address
 uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4e, 0x03, 0x98}; //  70:4b:ca:4e:03:98
@@ -13,6 +15,8 @@ const int vy3Pin = 34;
 const int button1Pin = 5;
 const int button2Pin = 18;
 const int button3Pin = 19;
+byte servoPin = 15;
+Servo servo;
 
 int vy1Value = 0;
 int vy2Value = 0;
@@ -39,26 +43,29 @@ esp_now_peer_info_t peerInfo;
 
 // callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  Serial.print("\r\nLast Packet Send Status:\t");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+//  Serial.print("\r\nLast Packet Send Status:\t");
+ // Serial.print(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail ");
 }
  
 void setup() {
   // Init Serial Monitor
   Serial.begin(115200);
-  pinMode(vy1Pin, INPUT_PULLUP);
-  pinMode(vy2Pin, INPUT_PULLUP);
-  pinMode(vy3Pin, INPUT_PULLUP);
+  pinMode(vy1Pin, INPUT);
+  pinMode(vy2Pin, INPUT);
+  pinMode(vy3Pin, INPUT);
   pinMode(button1Pin, INPUT_PULLUP);
   pinMode(button2Pin, INPUT_PULLUP);
   pinMode(button3Pin, INPUT_PULLUP);
+
+  pinMode(servoPin, OUTPUT);
+  servo.attach(servoPin);
  
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
+    // Serial.print("Error initializing ESP-NOW ");
     return;
   }
 
@@ -73,10 +80,18 @@ void setup() {
   
   // Add peer        
   if (esp_now_add_peer(&peerInfo) != ESP_OK){
-    Serial.println("Failed to add peer");
+    // Serial.println("Failed to add peer");
     return;
   }
 }
+
+const int edfPowerMin = 500;
+const int edfPowerMax = 2400;
+const int edfJoystickDefault = 1950;
+int edfPower = edfPowerMin;
+int edfIncrementMax = 5;
+int edfIncrement = 0;
+
  
 void loop() {
 
@@ -88,7 +103,7 @@ void loop() {
   Serial.print(" VY2: ");
   Serial.print(vy2Value);
   Serial.print(" VY3: ");
-  Serial.println(vy3Value);
+  Serial.print(vy3Value);
 
   button1Value = digitalRead(button1Pin);
   button2Value = digitalRead(button2Pin);
@@ -100,17 +115,40 @@ void loop() {
   myData.button1 = button1Value;
   myData.button2 = button2Value;
   myData.button3 = button3Value;
+
+  edfIncrement = 0;
+  if (myData.vy3 < edfJoystickDefault) {
+    edfIncrement=map(myData.vy3, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
+  } else {
+    edfIncrement=map(myData.vy3, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
+  }
+  bool button3State=myData.button3;
+  bool button2State=myData.button2;
+  bool escButtonState=myData.button1;
+
+  if (escButtonState == 0) {
+    edfPower += edfIncrement;
+    edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
+    
+    servo.writeMicroseconds(edfPower); // output to edfs
+  }
+  Serial.print(" EDF Increment: ");
+  Serial.print(edfIncrement);
+  Serial.print(" EDF Power: ");
+  Serial.print(edfPower);
  
   
   // Send message via ESP-NOW
   esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
    
-  if (result == ESP_OK) {
-    Serial.println("Sent with success");
-  }
-  else {
-    Serial.println("Error sending the data");
-  }
+  // if (result == ESP_OK) {
+  //   Serial.print("Sent with success ");
+  // }
+  // else {
+  //   Serial.print("Error sending the data ");
+  // }
+
+  Serial.println();
 
 }
 /*
