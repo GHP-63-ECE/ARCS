@@ -30,8 +30,8 @@ void setGantryPosition(int targetPos);
 
 // Left Motor Pins
 const int PWML = 23; 
-const int L1 = 16; // const int L1 = 22;
-const int L2 = 17; // const int L2 = 21;
+const int L1 = 22; // const int L1 = 22;
+const int L2 = 21; // const int L2 = 21;
 
 // Right Motor Pins
 const int PWMR = 19; 
@@ -40,7 +40,7 @@ const int R2 = 5;
 
 // Encoder Connections
 const int ENCAFL = 35; // Encoder A pin for Front Left Motor
-const int ENCBFL = 26; // Encoder B pin for Front Left Motor
+const int ENCBFL = 34; // Encoder B pin for Front Left Motor
 
 const int ENCAFR = 33; // Encoder A pin for Front Right Motor
 const int ENCBFR = 25; // Encoder B pin for Front Right Motor
@@ -56,7 +56,7 @@ const int Gantry2 = 26;
 // Extruder Motor Pins
 const int PWM_EXT = 14;
 const int EXT1 = 12;
-const int EXT2 = 13;
+const int EXT2 = 15;
 
 byte servoPin = 13; // signal pin for the ESC.
 Servo servo;
@@ -615,34 +615,131 @@ const int edfJoystickDefault = 1950;
 int edfPower = edfPowerMin;
 int edfIncrementMax = 5;
 int edfIncrement = 0;
+int powerValue = 0;
 
 void loop() {
+  Serial.println("Looping");
 
-  int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
-  int rightVal=map(joystickData.vy2, 0, 4095, -255, 255);
-  bool button3State=joystickData.button3;
-  bool button2State=joystickData.button2;
-  bool escButtonState=joystickData.button1;
+  // int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
+  // int rightVal=map(joystickData.vy2, 0, 4095, -255, 255);
+  // bool button3State=joystickData.button3;
+  // bool button2State=joystickData.button2;
+  // bool escButtonState=joystickData.button1;
 
-  edfIncrement = 0;
-  if (joystickData.vy3 < edfJoystickDefault) {
-    edfIncrement=map(joystickData.vy3, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
-  } else {
-    edfIncrement=map(joystickData.vy3, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
-  }
+  // edfIncrement = 0;
+  // if (joystickData.vy3 < edfJoystickDefault) {
+  //   edfIncrement=map(joystickData.vy3, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
+  // } else {
+  //   edfIncrement=map(joystickData.vy3, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
+  // }
 
-  if (escButtonState == 0) {
-    edfPower += edfIncrement;
-    edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
+  // if (escButtonState == 0) {
+  //   edfPower += edfIncrement;
+  //   edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
     
-    servo.writeMicroseconds(edfPower); // output to edfs
-  }
-  Serial.print(" EDF Increment: ");
-  Serial.print(edfIncrement);
-  Serial.print(" EDF Power: ");
-  Serial.print(edfPower);
+  //   servo.writeMicroseconds(edfPower); // output to edfs
+  // }
+  // Serial.print(" EDF Increment: ");
+  // Serial.print(edfIncrement);
+  // Serial.print(" EDF Power: ");
+  // Serial.print(edfPower);
   
-  setSpeed(leftVal, rightVal);
+  // setSpeed(leftVal, rightVal);
+  // Serial.print(" Left: ");
+  // Serial.print(leftVal);
+  // Serial.print(" Right: ");
+  // Serial.println(rightVal);
+
+if (BS.available() > 0) {
+    char dataFromPi = BS.read();
+       switch(dataFromPi) {
+      case 'w':
+        forwards();
+        BS.print('w');
+        break;
+      case 's':
+        backwards();
+        BS.print('s');
+        break;
+      case 'a':
+        left();
+        BS.print('a');
+        break;
+      case 'd':
+        right();
+        BS.print('d');
+        break;
+      case ' ':
+        stopAllMotors();
+        BS.print("FUCK! Stop");
+        break;
+
+      case '+':
+        powerValue += 100;
+        BS.println(powerValue);
+        break;
+      case '-':
+        powerValue -= 100;
+        BS.println(powerValue);
+        break;
+      case 'k':
+        powerValue = 0;
+        BS.println(powerValue);
+        break;
+      case 'l':
+        setGantryPower(pwrGantry);
+        BS.println("Gantry Forward");
+        break;
+      case 'r':
+        setGantryPower(-pwrGantry);
+        BS.println("Gantry Backward");
+        break;
+      case 'e':
+        setGantryPower(0);
+        BS.println("Gantry Stop");
+        break;
+      case 'p':
+        pwrGantry += 10;
+        if (pwrGantry > 255) pwrGantry = 255;
+        BS.println("Power: " + String(pwrGantry));
+        break;
+      case 'm':
+        pwrGantry -= 10;
+        if (pwrGantry < 0) pwrGantry = 0;
+        BS.println("Power: " + String(pwrGantry));
+        break;
+      case 'v':
+       movementSpeed += 10;
+       if (movementSpeed > 255) movementSpeed = 255;
+       BS.println("Drive Speed: " + String(movementSpeed));
+      break;
+      case 'b':
+        movementSpeed -= 10;
+          if (movementSpeed < 0) movementSpeed = 0;
+        BS.println("Drive Speed: " + String(movementSpeed));
+      break;
+      case 'y':
+      driveToCrackCenter(0.6, 0.5); // Example coordinates for the crack center
+      BS.println("Driving to Crack Center, godspeed");
+      break;
+      case 'g':
+        gantryAlign(0.6); // Example x-coordinate for the crack center
+        BS.println("Aligning Gantry to Crack Center");
+        break;
+      default:
+        BS.println("Unknown command received: " + dataFromPi);
+        break;
+    }
+    int pwmVal = map(powerValue,0, 1023, 1100, 1900); // translate POT values to ESC value.
+    float percentVal = ((pwmVal - 1100) / 8);
+    servo.writeMicroseconds(pwmVal);
+    delay(50);
+    }
+
+
+  // setGantryPower(100);
+
+  // forwards();
 
   // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
@@ -658,38 +755,38 @@ void loop() {
   digitalWrite(Gantry2, LOW);
   analogWrite(ENI, 100);
 
-  if (BS.available() > 0) {
-    String rawData = Serial.readStringUntil('\n');
-    rawData.trim();
-    if (rawData.length() > 0) {
-      int cxIndex = rawData.indexOf("cx");
-      int cyIndex = rawData.indexOf("cy");
-      int xIndex = rawData.indexOf("x1");
-      String xData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
-      String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
-      cx = xData.toFloat();
-      cy = yData.toFloat();
-    Serial.println(rawData);
-    }
-  }
+  // if (BS.available() > 0) {
+  //   String rawData = Serial.readStringUntil('\n');
+  //   rawData.trim();
+  //   if (rawData.length() > 0) {
+  //     int cxIndex = rawData.indexOf("cx");
+  //     int cyIndex = rawData.indexOf("cy");
+  //     int xIndex = rawData.indexOf("x1");
+  //     String xData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
+  //     String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
+  //     cx = xData.toFloat();
+  //     cy = yData.toFloat();
+  //   Serial.println(rawData);
+  //   }
+  // }
 
-  if(autonomous){
-    if(isDriveAligned()){
-      gantryAlign(cx);
-      if(isAtTargetPositionGantry()){
-        setExtruderPower(pwrExt);
-        delay(500);//time to extrude
-        setExtruderPower(0);
-        delay(500);//time to spray
-        setExtruderPower(-pwrExt);
-        delay(500);//time to retract
-      } else {
-        setExtruderPower(0);
-      }
-    } else {
-      driveToCrackCenter(cx, cy);
-    }
-  }
+  // if(autonomous){
+  //   if(isDriveAligned()){
+  //     gantryAlign(cx);
+  //     if(isAtTargetPositionGantry()){
+  //       setExtruderPower(pwrExt);
+  //       delay(500);//time to extrude
+  //       setExtruderPower(0);
+  //       delay(500);//time to spray
+  //       setExtruderPower(-pwrExt);
+  //       delay(500);//time to retract
+  //     } else {
+  //       setExtruderPower(0);
+  //     }
+  //   } else {
+  //     driveToCrackCenter(cx, cy);
+  //   }
+  // }
 
   // turnDegrees(180 , 200);
   // turnDegrees2(90);
