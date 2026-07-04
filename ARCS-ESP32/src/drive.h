@@ -44,7 +44,7 @@ public:
   void directionBackward();
 
   // Function to stop both motors
-  void stopAllMotors();
+  void stopAllDriveMotors();
 
   // Function to set individual motor speeds (PWM values: 0 to 255)
   void setSpeed(int speedA, int speedB);

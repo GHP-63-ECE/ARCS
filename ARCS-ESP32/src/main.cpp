@@ -7,7 +7,7 @@
 
 // MARK: Function prototypes 
 // because c++ is a liar
-void stopAllMotors();
+void stopAllDriveMotors();
 void setSpeed(int speedA, int speedB);
 void updateEncoderLeft();
 void updateEncoderRight();
@@ -123,7 +123,7 @@ bool button3;
 } struct_message;
 
 // Create a struct_message called joystickData
-struct_message joystickData;
+struct_message joystickData = {1950, 1950, 1950, true, true, true};
 
 // Callback function that will be executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
@@ -201,7 +201,7 @@ int pidOutputToSpeed(double output, long error, int maxSpeed) {
 bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed) {
   int maxSpeed = constrain(abs(speed), 0, 255);
   if (maxSpeed == 0 || (leftTargetTicks == 0 && rightTargetTicks == 0)) {
-    stopAllMotors();
+    stopAllDriveMotors();
     return true;
   }
 
@@ -240,12 +240,12 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
     // Serial.print(currentRight);
 
     if (leftAtTarget && rightAtTarget) {
-      stopAllMotors();
+      stopAllDriveMotors();
       return true;
     }
 
     if (millis() - startTime > timeoutMs) {
-      stopAllMotors();
+      stopAllDriveMotors();
       Serial.println("Encoder movement timed out");
       return false;
     }
@@ -396,7 +396,7 @@ void stopRightMotors() {
   digitalWrite(PWMR, 0);
 }
 
-void stopAllMotors() {
+void stopAllDriveMotors() {
   stopLeftMotors();
   stopRightMotors();
 }
@@ -584,7 +584,7 @@ void setup() {
   leftDrivePID.Init(kP, kI, kD);
   rightDrivePID.Init(kP, kI, kD);
   // Turn off motors initially
-  stopAllMotors();
+  stopAllDriveMotors();
 
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
@@ -607,10 +607,10 @@ long encoderEndLeft = 0;
 long encoderEndRight = 0;
 float rpmLeft = 0.0;
 float rpmRight = 0.0;
-int pwmValue = 255;
+// int pwmValue = 255;
 
-const int edfPowerMin = 500;
-const int edfPowerMax = 2400;
+const int edfPowerMin = 1100;
+const int edfPowerMax = 1900;
 const int edfJoystickDefault = 1950;
 int edfPower = edfPowerMin;
 int edfIncrementMax = 5;
@@ -654,9 +654,9 @@ void loop() {
   // Serial.print(", ");
   // Serial.println(String(encoderValueGantry));
 
-  digitalWrite(Gantry1, HIGH);
-  digitalWrite(Gantry2, LOW);
-  analogWrite(ENI, 100);
+  // digitalWrite(Gantry1, HIGH);
+  // digitalWrite(Gantry2, LOW);
+  // analogWrite(ENI, 100);
 
   if (BS.available() > 0) {
     String rawData = Serial.readStringUntil('\n');
@@ -700,7 +700,7 @@ void loop() {
   //   encoderStartRight = encoderValueRight;
   //   setSpeed(pwmValue, pwmValue);
   //   delay(5000);
-  //   stopAllMotors();
+  //   stopAllDriveMotors();
   //   encoderEndLeft = encoderValueLeft;
   //   encoderEndRight = encoderValueRight;
   //   rpmLeft = (encoderEndLeft - encoderStartLeft) / 5.0 * 60.0 / ticksPerRotation;
