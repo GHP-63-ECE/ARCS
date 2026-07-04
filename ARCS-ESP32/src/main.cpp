@@ -7,6 +7,8 @@
 #include <esp_log.h>
 #include <Adafruit_LSM6DSOX.h>
 #include <Adafruit_LIS3MDL.h>
+#include <SPIFFS.h>
+#include <FS.h>
 
 
 // MARK: Function prototypes 
@@ -44,10 +46,10 @@ const int R2 = 5;
 
 // Encoder Connections
 const int ENCAFL = 35; // Encoder A pin for Front Left Motor
-const int ENCBFL = 26; // Encoder B pin for Front Left Motor
+const int ENCBFL = 34; // Encoder B pin for Front Left Motor
 
 const int ENCAFR = 33; // Encoder A pin for Front Right Motor
-const int ENCBFR = 25; // Encoder B pin for Front Right Motor
+const int ENCBFR = 32; // Encoder B pin for Front Right Motor
 
 const int ENCEXTA = 36; // 1st Encoder Pin for Extruder
 const int ENCEXTB = 39; // 2nd Encoder Pin for Extruder
@@ -560,6 +562,8 @@ void setup() {
   pidController.Init(kP, kI, kD);
   pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
 
+  File file = SPIFFS.open("/data.csv", FILE_WRITE);
+
   servo.attach(servoPin);
   servo.writeMicroseconds(1500); // send "stop" signal to ESC. Also necessary to arm the ESC.
   ESP_LOGI(TAG, "ESC TEST PREP");
@@ -669,7 +673,7 @@ void loop() {
         delay(500);//time to spray
         setExtruderPower(-pwrExt);
         delay(500);//time to retract
-        ESP_LOGD(TAG, "Drive Aligned");
+        // ESP_LOGD(TAG, "Drive Aligned");
       } else {
         setExtruderPower(0);
       }
