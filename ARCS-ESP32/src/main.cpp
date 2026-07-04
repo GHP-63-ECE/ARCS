@@ -24,7 +24,7 @@ int pidOutputToSpeed(double output, long error, int maxSpeed);
 bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed);
 void setGantryPower(int power);
 void updateEncoderGantry();
-void setGantryPosition(int targetPos);
+bool setGantryPosition(int targetPos);
 
 // MARK: Pinout
 
@@ -469,24 +469,93 @@ void setGantryPower(int power) {
     gantryDirectionBackward();
   } else {
     gantryDirectionForward();
+    Serial.println("Gantry Power: " + String(power));
+  }
+  if (power > 255) {
+    power = 255;
   }
   analogWrite(ENI, power);
 }
 
-void setGantryPosition(int targetPos) {
-    int error = targetPos - encoderValueGantry;
-    targetPositionGantry = targetPos;
+long readEncoderGantry() {
+  noInterrupts();
+  long value = encoderValueGantry;
+  interrupts();
+  return value;
+}
 
+bool setGantryPosition(int targetPos, int speed) {
+  long startLeft = readEncoderGantry();
+
+  // float longestDistanceMm = ((targetPos) / (float)ticksPerRotation) * wheelCircumference;
+  // unsigned long timeoutMs = (unsigned long)((longestDistanceMm / mmPerSecond(speed)) * 3000.0) + 1000;
+  // unsigned long startTime = millis();
+
+  while (true) {
+    long current = readEncoderGantry();
+    long error = targetPositionLeft - current;
+
+    bool atTarget = abs(error) <= encoderToleranceTicks;
+
+    // Serial.print("Left Error: ");
+    // Serial.print(leftError);
+    // Serial.print(", Right Error: ");
+    // Serial.print(rightError);
+    // Serial.print(", Left Target: ");
+    // Serial.print(targetPositionLeft);   
+    // Serial.print(", Right Target: ");
+    // Serial.print(targetPositionRight);
+    // Serial.print(", Left Current: ");
+    // Serial.print(currentLeft);
+    // Serial.print(", Right Current: ");
+    // Serial.print(currentRight);
+
+    if (atTarget) {
+      stopGantry();
+      return true;
+    }
+
+    // if (millis() - startTime > timeoutMs) {
+    //   stopGantry();
+    //   Serial.println("Encoder movement timed out");
+    //   return false;
+    // }
+    
     pidControllerGantry.UpdateError(error);
+    // Serial.print(", Left P: ");
+    // Serial.print(leftDrivePID.p_error);
+    // Serial.print(", Left I: ");
+    // Serial.print(leftDrivePID.i_error);
+    // Serial.print(", Left D: ");
+    // Serial.print(leftDrivePID.d_error);
+    // Serial.print(", Right P: ");
+    // Serial.print(rightDrivePID.p_error);
+    // Serial.print(", Right I: ");
+    // Serial.print(rightDrivePID.i_error);
+    // Serial.print(", Right D: ");
+    // Serial.println(rightDrivePID.d_error);
+    double output = pidControllerGantry.TotalError();
 
-    analogWrite(ENI, pidControllerGantry.p_error*kP_gantry + pidControllerGantry.i_error*kI_gantry + pidControllerGantry.d_error*kD_gantry);    
+    // Serial.print(", Left Output: ");
+    // Serial.print(leftOutput);
+    // Serial.print(", Right Output: ");
+    // Serial.println(rightOutput);
+
+    int speed = atTarget ? 0 : pidOutputToSpeed(output, error, speed);
+    delay(movementLoopDelayMs);
+  }
 }
 
 bool isAtTargetPositionGantry() {
-    return abs(targetPositionGantry - encoderValueGantry) < 5;
+  return abs(targetPositionGantry - encoderValueGantry) < 5;
 }
 
-
+void honeGantryPosition() {
+  setGantryPower(-10); // Move gantry backward slowly
+  int currentPosition = readEncoderGantry();
+  
+  // while (currentPos)
+}
 
 // MARK: Encoder Functions
 
@@ -623,132 +692,123 @@ void loop() {
   // turnDegrees(90, 200);
   // while (true) {}
 
-  int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
-  int rightVal=map(joystickData.vy3, 0, 4095, -255, 255);
-  if (abs(leftVal) < joystickDeadzone) {
-    leftVal = 0;
-  }
-  if (abs(rightVal) < joystickDeadzone) {
-    rightVal = 0;
-  }
-  bool button3State=joystickData.button3;
-  bool button2State=joystickData.button2;
-  bool button1State=joystickData.button1;
+  // setGantryPosition(100, 50);
+  // Serial.println("Gantry Position: " + String(encoderValueGantry));
 
-  edfIncrement = 0;
-  if (joystickData.vy3 < edfJoystickDefault) {
-    edfIncrement=map(joystickData.vy2, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
-  } else {
-    edfIncrement=map(joystickData.vy2, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
-  }
-
-  leftVal = -leftVal;
-  rightVal = -rightVal;
-  edfIncrement = -edfIncrement;
-  edfIncrement /= edfIncrementMax; // Normalize to -1 to 1
-  if(button1State == 0){
-    killEverything = false;
-    autonomous = false;
-  } else if(button3State == 0){
-    killEverything = true;
-  }
-  if (killEverything) {
-    edfPower = edfPowerMin;
-    servo.writeMicroseconds(edfPower); // output to edfs
-    stopAllDriveMotors();
-    analogWrite(ENI, 0);
-    setExtruderPower(0);
-  } else {
-    if (button2State == 0) {
-      edfPower += edfIncrement;
-      edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
-      servo.writeMicroseconds(edfPower); // output to edfs
-    } 
-    // else if (button2State == 0 && button1State == 0) {
-    //   autonomous = true;
-    // }
-    setSpeed(leftVal, rightVal);
-  }
+  digitalWrite(Gantry1, HIGH);
+  digitalWrite(Gantry2, LOW);
+  analogWrite(ENI, 255);
+  delay(500);
+  analogWrite(ENI, 0);
+  delay(500);
+  while(true) {}
   
-  Serial.print(" EDF Increment: ");
-  Serial.print(edfIncrement);
-  Serial.print(" EDF Power: ");
-  Serial.print(edfPower);
-  Serial.print(" Left Val: ");
-  Serial.print(leftVal);
-  Serial.print(" Right Val: ");
-  Serial.print(rightVal);
-  Serial.print(" Kill Everything: ");
-  Serial.print(killEverything);
-  Serial.println();
+  // setGantryPower(0);
+  // delay(1000);
+
+  // int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
+  // int rightVal=map(joystickData.vy3, 0, 4095, -255, 255);
+  // if (abs(leftVal) < joystickDeadzone) {
+  //   leftVal = 0;
+  // }
+  // if (abs(rightVal) < joystickDeadzone) {
+  //   rightVal = 0;
+  // }
+  // bool button3State=joystickData.button3;
+  // bool button2State=joystickData.button2;
+  // bool button1State=joystickData.button1;
+
+  // edfIncrement = 0;
+  // if (joystickData.vy3 < edfJoystickDefault) {
+  //   edfIncrement=map(joystickData.vy2, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
+  // } else {
+  //   edfIncrement=map(joystickData.vy2, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
+  // }
+
+  // leftVal = -leftVal;
+  // rightVal = -rightVal;
+  // edfIncrement = -edfIncrement;
+  // edfIncrement /= edfIncrementMax; // Normalize to -1 to 1
+  // if(button1State == 0){
+  //   killEverything = false;
+  //   autonomous = false;
+  // } else if(button3State == 0){
+  //   killEverything = true;
+  // }
+  // if (killEverything) {
+  //   edfPower = edfPowerMin;
+  //   servo.writeMicroseconds(edfPower); // output to edfs
+  //   stopAllDriveMotors();
+  //   analogWrite(ENI, 0);
+  //   setExtruderPower(0);
+  // } else {
+  //   if (button2State == 0) {
+  //     edfPower += edfIncrement;
+  //     edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
+  //     servo.writeMicroseconds(edfPower); // output to edfs
+  //   } 
+  //   // else if (button2State == 0 && button1State == 0) {
+  //   //   autonomous = true;
+  //   // }
+  //   setSpeed(leftVal, rightVal);
+  // }
   
-  // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
+  // Serial.print(" EDF Increment: ");
+  // Serial.print(edfIncrement);
+  // Serial.print(" EDF Power: ");
+  // Serial.print(edfPower);
+  // Serial.print(" Left Val: ");
+  // Serial.print(leftVal);
+  // Serial.print(" Right Val: ");
+  // Serial.print(rightVal);
+  // Serial.print(" Kill Everything: ");
+  // Serial.print(killEverything);
+  // Serial.println();
+  
+  // // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
-  // driveDistance(700, 255);
+  // // driveDistance(700, 255);
 
-  // Serial.print(String(encoderValueLeft));
-  // Serial.print(", ");
-  // Serial.print(String(encoderValueRight));
-  // Serial.print(", ");
-  // Serial.println(String(encoderValueGantry));
+  // // Serial.print(String(encoderValueLeft));
+  // // Serial.print(", ");
+  // // Serial.print(String(encoderValueRight));
+  // // Serial.print(", ");
+  // // Serial.println(String(encoderValueGantry));
 
-  // digitalWrite(Gantry1, HIGH);
-  // digitalWrite(Gantry2, LOW);
-  // analogWrite(ENI, 100);
+  // // digitalWrite(Gantry1, HIGH);
+  // // digitalWrite(Gantry2, LOW);
+  // // analogWrite(ENI, 100);
 
-  if (BS.available() > 0) {
-    String rawData = Serial.readStringUntil('\n');
-    rawData.trim();
-    if (rawData.length() > 0) {
-      int cxIndex = rawData.indexOf("cx");
-      int cyIndex = rawData.indexOf("cy");
-      int xIndex = rawData.indexOf("x1");
-      String xData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
-      String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
-      cx = xData.toFloat();
-      cy = yData.toFloat();
-    Serial.println(rawData);
-    }
-  }
+  // if (BS.available() > 0) {
+  //   String rawData = Serial.readStringUntil('\n');
+  //   rawData.trim();
+  //   if (rawData.length() > 0) {
+  //     int cxIndex = rawData.indexOf("cx");
+  //     int cyIndex = rawData.indexOf("cy");
+  //     int xIndex = rawData.indexOf("x1");
+  //     String xData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
+  //     String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
+  //     cx = xData.toFloat();
+  //     cy = yData.toFloat();
+  //   Serial.println(rawData);
+  //   }
+  // }
 
-  if(autonomous){
-    if(cx == 0 && cy == 0){
-    if(isDriveAligned()){
-      Serial.println("Drive aligned with crack center");
-      }
-    } else {
-      // driveToCrackCenter(cx, cy);
-    }
-  }
+  // if(autonomous){
+  //   if(cx == 0 && cy == 0){
+  //   if(isDriveAligned()){
+  //     Serial.println("Drive aligned with crack center");
+  //     }
+  //   } else {
+  //     // driveToCrackCenter(cx, cy);
+  //   }
+  // }
 
   // turnDegrees(180 , 200);
   // turnDegrees2(90);
 
-  // forwards();
-  // for (pwmValue = 255; pwmValue >= 0; pwmValue -= 17) {
-  //   encoderStartLeft = encoderValueLeft;
-  //   encoderStartRight = encoderValueRight;
-  //   setSpeed(pwmValue, pwmValue);
-  //   delay(5000);
-  //   stopAllDriveMotors();
-  //   encoderEndLeft = encoderValueLeft;
-  //   encoderEndRight = encoderValueRight;
-  //   rpmLeft = (encoderEndLeft - encoderStartLeft) / 5.0 * 60.0 / ticksPerRotation;
-  //   rpmRight = (encoderEndRight - encoderStartRight) / 5.0 * 60.0 / ticksPerRotation;
-  //   Serial.print("PWM Value: ");
-  //   Serial.print(pwmValue);
-  //   Serial.print(", RPM Left: ");
-  //   Serial.print(rpmLeft);
-  //   Serial.print(", RPM Right: ");
-  //   Serial.println(rpmRight);
-  //   delay(5000);
-  // }
 
   // setSpeed(255, 255);
-
-
-  // left();
-  // while (true) {}
 
   // Serial.print(String((ENCAFR)));
   // Serial.print(", ");

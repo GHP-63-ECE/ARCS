@@ -17,6 +17,8 @@ void PID::Init(double Kp, double Ki, double Kd) {
     i_error = 0.0;
     d_error = 0.0;
 
+    // Initialize the rolling accumulator for the integral term
+    // The rolling accumulator is used to prevent integral windup by keeping track of the last N error values
     for (int i = 0; i < rollingAccumulatorSize; i++) {
         rollingaccumulator[i] = 0.0;
     }
