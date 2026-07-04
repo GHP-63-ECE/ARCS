@@ -9,6 +9,10 @@
 #include <Adafruit_LIS3MDL.h>
 #include <SPIFFS.h>
 #include <FS.h>
+#include <ESPFMfGK.h>
+#include <SD_MMC.h>
+#include <SD.h>
+#include <FFat.h>
 
 
 // MARK: Function prototypes 
@@ -33,6 +37,10 @@ void updateEncoderGantry();
 void setGantryPosition(int targetPos);
 
 // MARK: Pinout
+
+const word filemanagerport = 8080;
+// we want a different port than the webserver
+ESPFMfGK filemgr(filemanagerport);  
 
 // Left Motor Pins
 const int PWML = 23; 
@@ -101,6 +109,11 @@ volatile long encoderValueGantry = 0;
 int targetPositionRight;
 int targetPositionLeft;
 int targetPositionGantry;
+
+File edfFile = SPIFFS.open("/edf.csv", FILE_WRITE);
+File encoderFile = SPIFFS.open("/encoder.csv", FILE_WRITE);
+File visionFile = SPIFFS.open("/vision.csv", FILE_WRITE);
+File dataFile = SPIFFS.open("/data.txt", FILE_WRITE);
 
 const float wheelDiameter = 45.0; // mm
 const long ticksPerRotation = 7*298; 
@@ -228,10 +241,10 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
     bool leftAtTarget = abs(leftError) <= encoderToleranceTicks;
     bool rightAtTarget = abs(rightError) <= encoderToleranceTicks;
 
-    ESP_LOGD(TAG, "Left Error: %ld", leftError);
-    ESP_LOGD(TAG, "Right Error: %ld", rightError);
-    ESP_LOGD(TAG, "Left Target: %ld", targetPositionLeft);
-    ESP_LOGD(TAG, "Right Target: %ld", targetPositionRight);
+    // ESP_LOGD(TAG, "Left Error: %ld", leftError);
+    // ESP_LOGD(TAG, "Right Error: %ld", rightError);
+    // ESP_LOGD(TAG, "Left Target: %ld", targetPositionLeft);
+    // ESP_LOGD(TAG, "Right Target: %ld", targetPositionRight);
 
     if (leftAtTarget && rightAtTarget) {
       stopAllMotors();
@@ -240,7 +253,8 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
 
     if (millis() - startTime > timeoutMs) {
       stopAllMotors();
-      ESP_LOGW(TAG, "Encoder movement timed out");
+      // ESP_LOGW(TAG, "Encoder movement timed out");
+      dataFile.println("Encoder movement timed out");
       return false;
     }
     
@@ -261,15 +275,15 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
     double leftOutput = leftDrivePID.TotalError();
     double rightOutput = rightDrivePID.TotalError();
 
-    ESP_LOGD(TAG, "Left Output: %f", leftOutput);
-    ESP_LOGD(TAG, "Right Output: %f", rightOutput);
+    // ESP_LOGD(TAG, "Left Output: %f", leftOutput);
+    // ESP_LOGD(TAG, "Right Output: %f", rightOutput);
 
     int leftSpeed = leftAtTarget ? 0 : pidOutputToSpeed(leftOutput, leftError, maxSpeed);
     int rightSpeed = rightAtTarget ? 0 : pidOutputToSpeed(rightOutput, rightError, maxSpeed);
     if (leftTargetTicks == -rightTargetTicks) {
       // If turning, ensure both motors are moving at the same speed
       setSpeed(leftSpeed, -leftSpeed);
-      ESP_LOGD(TAG, "Output Speed: %d", leftSpeed);
+      // ESP_LOGD(TAG, "Output Speed: %d", leftSpeed);
     } else {
       setSpeed(leftSpeed, rightSpeed);
     }
@@ -524,6 +538,118 @@ void updateEncoderGantry(){
     encoderValueGantry--;
 }
 
+// Adds the filé systems
+void addFileSystems(void) {
+  // set configTzTime() in setup() to get valid file dates. Otherwise they are kaputt[tm].
+
+  // This adds the Storage into the Filemanager. You have to at least call one of those.
+  // If you don't, begin() will fail. Because a Filemanager without files is useless.
+
+  /**/  //<-- Addd space there like this /** /
+  if (FFat.begin(true)) {
+    if (!filemgr.AddFS(FFat, "Flash/FFat", false)) {
+      Serial.println(F("Adding FFAT failed."));
+    }
+  } else {
+    Serial.println(F("FFat File System not inited."));
+  }
+  /**/
+
+  /**/
+  if (SD_MMC.begin("/sdcard", true)) {
+    if (!filemgr.AddFS(SD_MMC, "SD-MMC-Card", false)) {
+      Serial.println(F("Adding SD_MMC failed."));
+    }
+  } else {
+    Serial.println(F("SD_MMC File System not inited."));
+  }
+  /**/
+
+  /**/
+  const byte SS = 5;  // D8
+  if (SD.begin(SS)) {
+    if (!filemgr.AddFS(SD, "SD-Card", false)) {
+      Serial.println(F("Adding SD failed."));
+    }
+  } else {
+    Serial.println(F("SD File System not inited."));
+  }
+  /**/
+}
+
+uint32_t checkFileFlags(fs::FS &fs, String filename, uint32_t flags) {
+  // Show file/path in Lists 
+  // filenames start without "/", pathnames start with "/"
+  if (flags & (ESPFMfGK::flagCheckIsFilename | ESPFMfGK::flagCheckIsPathname)) {
+    /** /
+    Serial.print("flagCheckIsFilename || flagCheckIsPathname check: ");
+    Serial.println(filename);
+    /**/
+    if (flags | ESPFMfGK::flagCheckIsFilename) {
+      if (filename.startsWith(".")) {
+        // Serial.println(filename + " flagIsNotVisible");
+        return ESPFMfGK::flagIsNotVisible;
+      }
+    }
+    /*
+       this will catch a pathname like /.test, but *not* /foo/.test
+       so you might use .indexOf()
+    */
+    if (flags | ESPFMfGK::flagCheckIsPathname) {
+      if (filename.startsWith("/.")) {
+        // Serial.println(filename + " flagIsNotVisible");
+        return ESPFMfGK::flagIsNotVisible;
+      }
+    }
+  }
+  
+  // Checks if target file name is valid for action. This will simply allow everything by returning the queried flag
+  if (flags & ESPFMfGK::flagIsValidAction) {
+    return flags & (~ESPFMfGK::flagIsValidAction);
+  }
+
+  // Checks if target file name is valid for action.
+  if (flags & ESPFMfGK::flagIsValidTargetFilename) {
+    return flags & (~ESPFMfGK::flagIsValidTargetFilename);
+  }
+
+  // Default actions
+  uint32_t defaultflags = ESPFMfGK::flagCanDelete | ESPFMfGK::flagCanRename | ESPFMfGK::flagCanGZip |  // ^t
+                          ESPFMfGK::flagCanDownload | ESPFMfGK::flagCanUpload | ESPFMfGK::flagCanEdit | // ^t
+                          ESPFMfGK::flagAllowPreview;
+
+  return defaultflags;
+}
+
+void setupFilemanager(void) {
+  // See above.
+  filemgr.checkFileFlags = checkFileFlags;
+
+  filemgr.WebPageTitle = "FileManager";
+  filemgr.BackgroundColor = "white";
+  filemgr.textareaCharset = "accept-charset=\"utf-8\"";
+
+  // If you want authentication
+  // filemgr.HttpUsername = "my";
+  // filemgr.HttpPassword = "secret";
+
+  // display the file date? change here. does not work well if you never set configTzTime()
+  // filemgr.FileDateDisplay = ESPFMfGK::fddNone;
+
+  if ((WiFi.status() == WL_CONNECTED) && (filemgr.begin())) {
+    Serial.print(F("Open Filemanager with http://"));
+    Serial.print(WiFi.localIP());
+    Serial.print(F(":"));
+    Serial.print(filemanagerport);
+    Serial.print(F("/"));
+    Serial.println();
+  } else {
+    Serial.print(F("Filemanager: did not start"));
+  }
+}
+
+//
+
 // MARK: Setup
 void setup() {
 
@@ -562,11 +688,9 @@ void setup() {
   pidController.Init(kP, kI, kD);
   pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
 
-  File file = SPIFFS.open("/data.csv", FILE_WRITE);
-
   servo.attach(servoPin);
   servo.writeMicroseconds(1500); // send "stop" signal to ESC. Also necessary to arm the ESC.
-  ESP_LOGI(TAG, "ESC TEST PREP");
+  dataFile.println("ESC TEST PREP");
   
   leftDrivePID.Init(kP, kI, kD);
   rightDrivePID.Init(kP, kI, kD);
@@ -576,6 +700,16 @@ void setup() {
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
 
+  encoderFile.println("Encoder Left, Encoder Right, Encoder Gantry");
+  edfFile.println("EDF Power, EDF Increment");
+  visionFile.println("cx, cy");
+
+  WiFi.begin("GHP2026", "Eagles2026");
+
+    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "");
+
+  addFileSystems();
+  setupFilemanager();
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
     ESP_LOGE(TAG, "Error initializing ESP-NOW");
@@ -605,11 +739,14 @@ int edfIncrement = 0;
 
 void loop() {
 
+  filemgr.handleClient();
+
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
   int rightVal=map(joystickData.vy2, 0, 4095, -255, 255);
   bool button3State=joystickData.button3;
   bool button2State=joystickData.button2;
   bool escButtonState=joystickData.button1;
+
 
   edfIncrement = 0;
   if (joystickData.vy3 < edfJoystickDefault) {
@@ -633,8 +770,9 @@ void loop() {
   if(button2State == 0){
     setExtruderPower(pwrExt);
   }
-  ESP_LOGD(TAG, "EDF Increment: %d", edfIncrement);
-  ESP_LOGD(TAG, "EDF Power: %d", edfPower);
+  edfFile.println(String(edfPower) + ", " + String(edfIncrement));
+  encoderFile.println(String(encoderValueLeft) + ", " + String(encoderValueRight) + ", " + String(encoderValueGantry));
+  visionFile.println(String(cx) + ", " + String(cy));
   
   setSpeed(leftVal, rightVal);
 
@@ -642,7 +780,7 @@ void loop() {
 
   // driveDistance(700, 255);
 
-  ESP_LOGD(TAG, "Encoder Values - Left: %ld, Right: %ld, Gantry: %ld", encoderValueLeft, encoderValueRight, encoderValueGantry);
+  // ESP_LOGD(TAG, "Encoder Values - Left: %ld, Right: %ld, Gantry: %ld", encoderValueLeft, encoderValueRight, encoderValueGantry);
 
   digitalWrite(Gantry1, HIGH);
   digitalWrite(Gantry2, LOW);
@@ -659,7 +797,7 @@ void loop() {
       String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
       cx = xData.toFloat();
       cy = yData.toFloat();
-      ESP_LOGD(TAG, "Received data - cx: %f, cy: %f", cx, cy);
+      // ESP_LOGD(TAG, "Received data - cx: %f, cy: %f", cx, cy);
     }
   }
 
