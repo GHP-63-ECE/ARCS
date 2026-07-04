@@ -647,6 +647,7 @@ void loop() {
   edfIncrement /= edfIncrementMax; // Normalize to -1 to 1
   if(button1State == 0){
     killEverything = false;
+    autonomous = false;
   } else if(button3State == 0){
     killEverything = true;
   }
@@ -660,8 +661,9 @@ void loop() {
     if (button2State == 0) {
       edfPower += edfIncrement;
       edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
-      
-      servo.writeMicroseconds(edfPower); // output to edfs
+      // servo.writeMicroseconds(edfPower); // output to edfs
+    } else if (button2State == 0 && button1State == 0) {
+      autonomous = true;
     }
     setSpeed(leftVal, rightVal);
   }
@@ -710,17 +712,9 @@ void loop() {
   }
 
   if(autonomous){
+    if(cx == 0 && cy == 0){
     if(isDriveAligned()){
-      gantryAlign(cx);
-      if(isAtTargetPositionGantry()){
-        setExtruderPower(pwrExt);
-        delay(500);//time to extrude
-        setExtruderPower(0);
-        delay(500);//time to spray
-        setExtruderPower(-pwrExt);
-        delay(500);//time to retract
-      } else {
-        setExtruderPower(0);
+      Serial.println("Drive aligned with crack center");
       }
     } else {
       driveToCrackCenter(cx, cy);
