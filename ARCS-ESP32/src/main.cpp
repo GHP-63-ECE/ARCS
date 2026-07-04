@@ -94,8 +94,8 @@ int targetPositionGantry;
 const float wheelDiameter = 45.0; // mm
 const long ticksPerRotation = 7*298; 
 const float wheelCircumference = wheelDiameter * PI;
-const float turnSlipCompensation = 1.0; // This is a fudge factor to account for the fact that the robot doesn't turn perfectly in place
-const float trackWidth = 150.0; // mm - TODO
+const float turnSlipCompensation = 0.4; // This is a fudge factor to account for the fact that the robot doesn't turn perfectly in place
+const float trackWidth = 350.0; // mm
 int movementSpeed = 255; // Speed for driving forward/backward (0-255)
 const float rpmAtMaxSpeed = 100; // Maximum RPM of the motor at full speed - TODO
 const float turnSpeed = 200; // Speed for turning left/right (0-255) - TODO
@@ -103,8 +103,8 @@ const int encoderToleranceTicks = 15;
 const int minimumPIDSpeed = 55;
 const unsigned long movementLoopDelayMs = 10;
 
-const float cameraFOVWidthMM = 100.0; // Width of the camera's field of view in millimeters - TODO
-const float cameraFOVHeightMM = 56.0; // Height of the camera's field of view in millimeters - TODO
+const float cameraFOVWidthMM = 95.0; // Width of the camera's field of view in millimeters - TODO
+const float cameraFOVHeightMM = 70.0; // Height of the camera's field of view in millimeters - TODO
 
 int pwrGantry = 100;
 int pwrExt = 100;
@@ -620,6 +620,7 @@ bool killEverything = false;
 
 void loop() {
   // forwards();
+  // turnDegrees(90, 200);
   // while (true) {}
 
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
@@ -661,10 +662,11 @@ void loop() {
     if (button2State == 0) {
       edfPower += edfIncrement;
       edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
-      // servo.writeMicroseconds(edfPower); // output to edfs
-    } else if (button2State == 0 && button1State == 0) {
-      autonomous = true;
-    }
+      servo.writeMicroseconds(edfPower); // output to edfs
+    } 
+    // else if (button2State == 0 && button1State == 0) {
+    //   autonomous = true;
+    // }
     setSpeed(leftVal, rightVal);
   }
   
@@ -676,8 +678,6 @@ void loop() {
   Serial.print(leftVal);
   Serial.print(" Right Val: ");
   Serial.print(rightVal);
-  Serial.print(" Button3 State: ");
-  Serial.print(button3State);
   Serial.print(" Kill Everything: ");
   Serial.print(killEverything);
   Serial.println();
@@ -717,7 +717,7 @@ void loop() {
       Serial.println("Drive aligned with crack center");
       }
     } else {
-      driveToCrackCenter(cx, cy);
+      // driveToCrackCenter(cx, cy);
     }
   }
 
