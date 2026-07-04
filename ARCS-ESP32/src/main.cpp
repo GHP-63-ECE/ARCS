@@ -30,8 +30,8 @@ void setGantryPosition(int targetPos);
 
 // Left Motor Pins
 const int PWML = 23; 
-const int L1 = 16; // const int L1 = 22;
-const int L2 = 17; // const int L2 = 21;
+const int L1 = 21; // const int L1 = 22;
+const int L2 = 22; // const int L2 = 21;
 
 // Right Motor Pins
 const int PWMR = 19; 
@@ -128,21 +128,21 @@ struct_message joystickData = {1950, 1950, 1950, true, true, true};
 // Callback function that will be executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&joystickData, incomingData, sizeof(joystickData));
-  Serial.print("Bytes received: ");
-  Serial.println(len);
-  Serial.print("VY1 ");
-  Serial.println(joystickData.vy1);
-  Serial.print("VY2 ");
-  Serial.println(joystickData.vy2);
-  Serial.print("VY3 ");
-  Serial.println(joystickData.vy3);
-  Serial.print("Button1: ");
-  Serial.println(joystickData.button1);
-  Serial.print("Button2: ");
-  Serial.println(joystickData.button2);
-  Serial.print("Button3: ");
-  Serial.println(joystickData.button3);
-  Serial.println();
+  // Serial.print("Bytes received: ");
+  // Serial.println(len);
+  // Serial.print("VY1 ");
+  // Serial.println(joystickData.vy1);
+  // Serial.print("VY2 ");
+  // Serial.println(joystickData.vy2);
+  // Serial.print("VY3 ");
+  // Serial.println(joystickData.vy3);
+  // Serial.print("Button1: ");
+  // Serial.println(joystickData.button1);
+  // Serial.print("Button2: ");
+  // Serial.println(joystickData.button2);
+  // Serial.print("Button3: ");
+  // Serial.println(joystickData.button3);
+  // Serial.println();
 }
 
 // MARK: Movement Calculations
@@ -578,7 +578,7 @@ void setup() {
   pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
 
   servo.attach(servoPin);
-  servo.writeMicroseconds(1500); // send "stop" signal to ESC. Also necessary to arm the ESC.
+  servo.writeMicroseconds(1100); // send "stop" signal to ESC. Also necessary to arm the ESC.
   Serial.println("ESC TEST PREP");
   
   leftDrivePID.Init(kP, kI, kD);
@@ -615,35 +615,71 @@ const int edfJoystickDefault = 1950;
 int edfPower = edfPowerMin;
 int edfIncrementMax = 5;
 int edfIncrement = 0;
+int joystickDeadzone = 50;
+bool killEverything = false;
 
 void loop() {
+  // forwards();
+  // while (true) {}
 
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
-  int rightVal=map(joystickData.vy2, 0, 4095, -255, 255);
+  int rightVal=map(joystickData.vy3, 0, 4095, -255, 255);
+  if (abs(leftVal) < joystickDeadzone) {
+    leftVal = 0;
+  }
+  if (abs(rightVal) < joystickDeadzone) {
+    rightVal = 0;
+  }
   bool button3State=joystickData.button3;
   bool button2State=joystickData.button2;
-  bool escButtonState=joystickData.button1;
+  bool button1State=joystickData.button1;
 
   edfIncrement = 0;
   if (joystickData.vy3 < edfJoystickDefault) {
-    edfIncrement=map(joystickData.vy3, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
+    edfIncrement=map(joystickData.vy2, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
   } else {
-    edfIncrement=map(joystickData.vy3, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
+    edfIncrement=map(joystickData.vy2, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
   }
 
-  if (escButtonState == 0) {
-    edfPower += edfIncrement;
-    edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
-    
-    servo.writeMicroseconds(edfPower); // output to edfs
+  leftVal = -leftVal;
+  rightVal = -rightVal;
+  edfIncrement = -edfIncrement;
+  edfIncrement /= edfIncrementMax; // Normalize to -1 to 1
+  if(button1State == 0){
+    killEverything = false;
+  } else if(button3State == 0){
+    killEverything = true;
   }
+  if (killEverything) {
+    edfPower = edfPowerMin;
+    servo.writeMicroseconds(edfPower); // output to edfs
+    stopAllDriveMotors();
+    analogWrite(ENI, 0);
+    setExtruderPower(0);
+  } else {
+    if (button2State == 0) {
+      edfPower += edfIncrement;
+      edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
+      
+      servo.writeMicroseconds(edfPower); // output to edfs
+    }
+    setSpeed(leftVal, rightVal);
+  }
+  
   Serial.print(" EDF Increment: ");
   Serial.print(edfIncrement);
   Serial.print(" EDF Power: ");
   Serial.print(edfPower);
+  Serial.print(" Left Val: ");
+  Serial.print(leftVal);
+  Serial.print(" Right Val: ");
+  Serial.print(rightVal);
+  Serial.print(" Button3 State: ");
+  Serial.print(button3State);
+  Serial.print(" Kill Everything: ");
+  Serial.print(killEverything);
+  Serial.println();
   
-  setSpeed(leftVal, rightVal);
-
   // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
   // driveDistance(700, 255);
