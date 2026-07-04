@@ -85,8 +85,8 @@ void setup() {
   }
 }
 
-const int edfPowerMin = 500;
-const int edfPowerMax = 2400;
+const int edfPowerMin = 1100;
+const int edfPowerMax = 1900;
 const int edfJoystickDefault = 1950;
 int edfPower = edfPowerMin;
 int edfIncrementMax = 5;
