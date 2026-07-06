@@ -623,10 +623,10 @@ void updateEncoderGantry(){
 
 bool crackAuto() {
   while(true){
-   if(cx == 0 && cy == 0){
-    Serial.println("No Crack Detected");
-    return false;
-   }
+    if(cx == 0 && cy == 0){
+      Serial.println("No Crack Detected");
+      return false;
+    }
     if(isDriveAligned()){
       Serial.println("Drive aligned with crack center");
       // if(isAtTargetPositionGantry()){
@@ -639,11 +639,11 @@ bool crackAuto() {
       return true;
     }
     
-     else {
+    else {
       int dCX = cx;
       int dCY = cy;
       while(!isDriveAligned){
-      driveToCrackCenter(dCX, dCY);
+        driveToCrackCenter(dCX, dCY);
       }
     }
     return false;
