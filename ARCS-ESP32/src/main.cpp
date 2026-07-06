@@ -90,6 +90,7 @@ volatile long encoderValueRight = 0;
 volatile long encoderValueGantry = 0;
 int targetPositionRight;
 int targetPositionLeft;
+
 int targetPositionGantry;
 int minGantryPosition = 0;
 int maxGantryPosition = 10520;
@@ -407,14 +408,14 @@ void right() {
 }
 
 void stopLeftMotors() {
-  digitalWrite(L1, LOW);
-  digitalWrite(L2, LOW);
+  digitalWrite(L1, HIGH);
+  digitalWrite(L2, HIGH);
   digitalWrite(PWML, 0);
 }
 
 void stopRightMotors() {
-  digitalWrite(R1, LOW);
-  digitalWrite(R2, LOW);
+  digitalWrite(R1, HIGH);
+  digitalWrite(R2, HIGH);
   digitalWrite(PWMR, 0);
 }
 
@@ -478,8 +479,8 @@ void gantryDirectionBackward() {
 }
 
 void stopGantry() {
-  digitalWrite(Gantry1, LOW);
-  digitalWrite(Gantry2, LOW);
+  digitalWrite(Gantry1, HIGH);
+  digitalWrite(Gantry2, HIGH);
   analogWrite(ENI, 0);
 }
 
@@ -502,7 +503,6 @@ void setGantryPower(int power) {
   if (power > 255) {
     power = 255;
   }
-  Serial.println("Gantry Power: " + String(power));
   analogWrite(ENI, power);
 }
 
@@ -769,14 +769,14 @@ void loop() {
     edfIncrement=map(joystickData.vy2, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
   }
 
-  leftVal = -leftVal;
-  rightVal = -rightVal;
+  gantryVal = -gantryVal;
 
   
   edfIncrement = -edfIncrement;
   edfIncrement /= edfIncrementMax; // Normalize to -1 to 1
   if(button1State == 0){
     killEverything = false;
+    // hasZeroedGantry = true;
     autonomous = false;
   } else if(button3State == 0){
     killEverything = true;
