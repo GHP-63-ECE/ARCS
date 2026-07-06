@@ -40,10 +40,10 @@ const int R2 = 5;
 
 // Encoder Connections
 const int ENCAFL = 35; // Encoder A pin for Front Left Motor
-const int ENCBFL = 26; // Encoder B pin for Front Left Motor
+const int ENCBFL = 34; // Encoder B pin for Front Left Motor
 
 const int ENCAFR = 33; // Encoder A pin for Front Right Motor
-const int ENCBFR = 25; // Encoder B pin for Front Right Motor
+const int ENCBFR = 32; // Encoder B pin for Front Right Motor
 
 const int ENCEXTA = 36; // 1st Encoder Pin for Extruder
 const int ENCEXTB = 39; // 2nd Encoder Pin for Extruder
@@ -697,11 +697,7 @@ void loop() {
 
   digitalWrite(Gantry1, HIGH);
   digitalWrite(Gantry2, LOW);
-  analogWrite(ENI, 255);
-  delay(500);
-  analogWrite(ENI, 0);
-  delay(500);
-  while(true) {}
+  analogWrite(ENI, 100);
   
   // setGantryPower(0);
   // delay(1000);
