@@ -629,12 +629,12 @@ void setup() {
   pinMode(EXT2, OUTPUT);
 
   // Set all encoder pins to inputs
-  pinMode(ENCAFL, INPUT);
-  pinMode(ENCBFL, INPUT);
-  pinMode(ENCAFR, INPUT);
-  pinMode(ENCBFR, INPUT);
-  pinMode(ENCEXTA, INPUT);
-  pinMode(ENCEXTB, INPUT);
+  // pinMode(ENCAFL, INPUT);
+  // pinMode(ENCBFL, INPUT);
+  // pinMode(ENCAFR, INPUT);
+  // pinMode(ENCBFR, INPUT);
+  // pinMode(ENCEXTA, INPUT);
+  // pinMode(ENCEXTB, INPUT);
 
   // Set encoder pins to interrupts
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
