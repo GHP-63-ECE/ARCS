@@ -84,8 +84,8 @@ double kD = 0.0;
 double kP_gantry = 0.1;
 double kI_gantry = 0;
 double kD_gantry = 0;
-int cx = 0;
-int cy = 0;
+int cx = 0.85;
+int cy = 0.2;
 
 bool autonomous = false;
 
@@ -364,7 +364,7 @@ float angleToCrackCenter(float cx, float cy) {
   float angle = angleToCrackCenter(cx, cy);
 
   // Define thresholds for alignment
-  const float distanceThreshold = 50; // mm
+  const float distanceThreshold = 1; // mm
   const float angleThreshold = 5.0; // degrees
 
   // Check if the robot is aligned with the crack center
@@ -695,15 +695,25 @@ bool crackAuto() {
       }
     }
     
-    else {
-      int dCX = cx;
+//     else {
+//       int dCX = cx;
+//       int dCY = cy;
+//       while(!isDriveAligned){
+//         driveToCrackCenter(dCX, dCY);
+//       }
+//     }
+//     return false;
+//   }
+// }
+
+bool testAutoDrive(){
+    int dCX = cx;
       int dCY = cy;
-      while(!isDriveAligned){
+      while(true){
         driveToCrackCenter(dCX, dCY);
       }
-    }
-    return false;
-  }
+      Serial.println("Aligned");
+    return true;
 }
 
 // MARK: Setup
@@ -799,7 +809,10 @@ void loop() {
   // setGantryPower(0);
   // delay(1000);
 
+  testAutoDrive();
+
   // MARK: Joystick Code
+  /*
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
   int rightVal=map(joystickData.vy3, 0, 4095, -255, 255);
   int gantryVal=map(joystickData.vx2, 0, 4095, -255, 255);
@@ -866,6 +879,7 @@ void loop() {
   Serial.print(" Kill Everything: ");
   Serial.print(killEverything);
   Serial.println();
+  */
   
   // // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
