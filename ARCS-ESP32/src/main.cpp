@@ -695,18 +695,18 @@ bool crackAuto() {
       }
     }
     
-//     else {
-//       int dCX = cx;
-//       int dCY = cy;
-//       while(!isDriveAligned){
-//         driveToCrackCenter(dCX, dCY);
-//       }
-//     }
-//     return false;
-//   }
-// }
+    else {
+      int dCX = cx;
+      int dCY = cy;
+      while(!isDriveAligned){
+        driveToCrackCenter(dCX, dCY);
+      }
+    }
+    return false;
+  }
+}
 
-bool testAutoDrive(){
+bool testAutoDrive() {
     int dCX = cx;
       int dCY = cy;
       while(true){
