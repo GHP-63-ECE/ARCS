@@ -46,8 +46,13 @@ const int ENCBFL = 35; // Encoder B pin for Front Left Motor
 const int ENCAFR = 32; // Encoder A pin for Front Right Motor
 const int ENCBFR = 33; // Encoder B pin for Front Right Motor
 
-const int ENCEXTA = 36; // 1st Encoder Pin for Extruder
-const int ENCEXTB = 39; // 2nd Encoder Pin for Extruder
+const int ENCGANA = 36; // 1st Encoder Pin for Gantry
+const int ENCGANB = 39; // 2nd Encoder Pin for Gantry 
+
+const int ENCEXTA = 2;
+const int ENCEXTB = 15;
+
+
 
 // Gantry Motor Pins
 const int ENI = 25;
@@ -57,7 +62,7 @@ const int Gantry2 = 26;
 // Extruder Motor Pins
 const int PWM_EXT = 14;
 const int EXT1 = 12;
-const int EXT2 = 13;
+const int EXT2 = 4;
 
 byte servoPin = 13; // signal pin for the ESC.
 Servo servo;
@@ -88,6 +93,10 @@ bool autonomous = false;
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
 volatile long encoderValueGantry = 0;
+volatile long encoderValueExtruder = 0;
+
+
+
 int targetPositionRight;
 int targetPositionLeft;
 
@@ -95,6 +104,11 @@ int targetPositionGantry;
 int minGantryPosition = 0;
 int maxGantryPosition = 10520;
 bool hasZeroedGantry = false;
+
+int targetPositionExtruder;
+int minExtruderPosition = 0;
+int maxExtruderPosition = 0;
+bool hasZeroedExtruder;
 
 const float wheelDiameter = 45.0; // mm
 const long ticksPerRotation = 7*298; 
@@ -487,7 +501,10 @@ void stopGantry() {
 void setGantryPower(int power) {
   long pos = readEncoderGantry();
   if (hasZeroedGantry) {
-    if (power < 0 && pos <= minGantryPosition) power = 0;
+    if (power < 0 && pos <= minGantryPosition) {
+      Serial.print(" Gantry Min Hit ");
+      power = 0;
+    }
     if (power > 0 && pos >= maxGantryPosition) power = 0;
   }
 
@@ -600,6 +617,36 @@ void setExtruderPower(int power) {
   analogWrite(PWM_EXT, power);
 }
 
+bool setExtruderPosition(int targetPos, int maxSpeed){
+  targetPos = constrain(targetPos, minGantryPosition, maxGantryPosition);
+  long startLeft = readEncoderGantry();
+
+  while (true) {
+    long current = readEncoderGantry();
+    long error = targetPos - current;
+
+    bool atTarget = abs(error) <= encoderToleranceTicks;
+
+    Serial.print("Gantry Error: ");
+    Serial.print(error);
+    if (atTarget) {
+      stopGantry();
+      return true;
+    }
+    
+    pidControllerGantry.UpdateError(error);
+    double output = pidControllerGantry.TotalError();
+    Serial.print(" Gantry PID Output: ");
+    Serial.print(output);
+
+    int speed = atTarget ? 0 : pidOutputToSpeed(output, error, maxSpeed);
+    setGantryPower(speed);
+    Serial.print(" Gantry Speed: ");
+    Serial.println(speed);
+    delay(movementLoopDelayMs);
+  }
+}
+
 void updateEncoderLeft(){
   if (digitalRead(ENCAFL) > digitalRead(ENCBFL))
     encoderValueLeft--;
@@ -615,28 +662,37 @@ void updateEncoderRight(){
 }
 
 void updateEncoderGantry(){
-  if (digitalRead(ENCEXTA) > digitalRead(ENCEXTB))
+  if (digitalRead(ENCGANA) > digitalRead(ENCGANB))
     encoderValueGantry++;
   else
     encoderValueGantry--;
 }
 
+void updateEncoderExtruder(){
+  if(digitalRead(ENCEXTA) > digitalRead(ENCEXTB)){
+    encoderValueExtruder++;
+  } else{
+    encoderValueExtruder--;
+  }
+}
+
 bool crackAuto() {
-  while(true){
-    if(cx == 0 && cy == 0){
+  while(true) {
+    if(cx == 0 && cy == 0) {
       Serial.println("No Crack Detected");
       return false;
     }
-    if(isDriveAligned()){
+    if(isDriveAligned()) {
       Serial.println("Drive aligned with crack center");
-      // if(isAtTargetPositionGantry()){
-      //   //TODO: Add extrusion
-      //   return true;
-      // } else {
-      // while(!isAtTargetPositionGantry()) {
-      // // gantryAlign(cx);
-      // }
-      return true;
+      if(isAtTargetPositionGantry()) {
+        // TODO: Add extrusion
+        return true;
+      } else {
+        while (!isAtTargetPositionGantry()) {
+          gantryAlign(cx);
+        }
+        return true;
+      }
     }
     
     else {
@@ -675,15 +731,15 @@ void setup() {
   pinMode(ENCBFL, INPUT);
   pinMode(ENCAFR, INPUT);
   pinMode(ENCBFR, INPUT);
-  pinMode(ENCEXTA, INPUT);
-  pinMode(ENCEXTB, INPUT);
+  pinMode(ENCGANA, INPUT);
+  pinMode(ENCGANB, INPUT);
 
   // Set encoder pins to interrupts
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
 
   attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
 
-  attachInterrupt(digitalPinToInterrupt(ENCEXTA), updateEncoderGantry, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENCGANA), updateEncoderGantry, RISING);
   
   pidController.Init(kP, kI, kD);
   pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
@@ -728,6 +784,7 @@ int edfIncrementMax = 5;
 int edfIncrement = 0;
 int joystickDeadzone = 50;
 bool killEverything = false;
+bool joystickConnected = false;
 
 void loop() {
   // forwards();
@@ -739,11 +796,8 @@ void loop() {
   // while (true) {}
   // Serial.println("Gantry Position: " + String(encoderValueGantry));
 
-  
-  
   // setGantryPower(0);
   // delay(1000);
-
 
   // MARK: Joystick Code
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
@@ -771,7 +825,6 @@ void loop() {
 
   gantryVal = -gantryVal;
 
-  
   edfIncrement = -edfIncrement;
   edfIncrement /= edfIncrementMax; // Normalize to -1 to 1
   if(button1State == 0){
@@ -781,7 +834,7 @@ void loop() {
   } else if(button3State == 0){
     killEverything = true;
   }
-  if (killEverything) {
+  if (killEverything || !joystickConnected) {
     edfPower = edfPowerMin;
     servo.writeMicroseconds(edfPower); // output to edfs
     stopAllDriveMotors();
