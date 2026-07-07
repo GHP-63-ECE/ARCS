@@ -64,16 +64,15 @@ const int ENCEXTA = 2;
 const int ENCEXTB = 15;
 
 byte servoPin = 13; // signal pin for the ESC.
+
 Servo servo;
-
-// MARK: Variables
-
 PID pidController = PID();
 PID leftDrivePID = PID();
 PID rightDrivePID = PID();
 PID pidControllerGantry = PID();
-
 BluetoothSerial BS;
+
+// MARK: Variables
 
 // Drivetrain PID values
 double kP = 0.45;
@@ -146,8 +145,7 @@ struct_message joystickData = {1950, 1950, 1950, 1950, true, true, true};
 // Callback function that will be executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&joystickData, incomingData, sizeof(joystickData));
-  // Serial.print("Bytes received: ");
-  // Serial.println(len);
+  // Serial.print("Bytes received: "); // Serial.println(len);
   // Serial.print("VY1 ");
   // Serial.println(joystickData.vy1);
   // Serial.print("VY2 ");
@@ -335,7 +333,19 @@ void turnDegrees(float degrees, int speed) {
 
 // Origin Coordinates
 float cameraXOrigin = 0.5; // Normalized X coordinate of the camera's origin 
-float cameraYOrigin =-2; // Normalized Y coordinate of the camera's origin
+float cameraYOrigin = -2; // Normalized Y coordinate of the camera's origin
+float cameraToRobotCenterMM = 85; // TODO
+float gantryDistanceToRobotCenterMM = 100; // TODO
+float minGantryPositionMM = -(185.7 / 2);
+
+float getGantryPosition() {
+
+}
+
+float normalizedToRobotRelativeX(float x) {
+  float x_mm = (x - 0.5) * cameraFOVWidthMM;
+  return x_mm;
+}
 
 // Calculating distance to the center of a crack based on normalized coordinates (cx, cy) of the crack in the camera's field of view
 float distanceToCrackCenter(float cx, float cy) {
@@ -806,7 +816,7 @@ const int edfPowerMin = 1100;
 const int edfPowerMax = 1900;
 const int edfJoystickDefault = 1950;
 int edfPower = edfPowerMin;
-int edfIncrementMax = 5;
+int edfIncrementResolution = 10;
 int edfIncrement = 0;
 int joystickDeadzone = 50;
 bool killEverything = false;
@@ -814,11 +824,11 @@ bool joystickConnected = false;
 
 void loop() {
 
-  homeGantryPosition();
-  driveToCrackCenter(0.5, 0.5);
-  gantryAlign(0.5);
-  // crackAuto();
-  while (true){}
+  // homeGantryPosition();
+  // driveToCrackCenter(0.5, 0.5);
+  // gantryAlign(0.5);
+  // // crackAuto();
+  // while (true){}
   // forwards();
   // turnDegrees(90, 200);
   // while (true) {}
@@ -854,15 +864,16 @@ void loop() {
 
   edfIncrement = 0;
   if (joystickData.vy3 < edfJoystickDefault) {
-    edfIncrement=map(joystickData.vy2, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
+    edfIncrement=map(joystickData.vy2, 0, edfJoystickDefault-200, -edfIncrementResolution, 0);
   } else {
-    edfIncrement=map(joystickData.vy2, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
+    edfIncrement=map(joystickData.vy2, edfJoystickDefault+100, 4095, 0, edfIncrementResolution);
   }
 
   gantryVal = -gantryVal;
 
   edfIncrement = -edfIncrement;
-  edfIncrement /= edfIncrementMax; // Normalize to -1 to 1
+  edfIncrement /= edfIncrementResolution; // Normalize to -1 to 1
+  edfIncrement *= 3;
   if(button1State == 0){
     killEverything = false;
     // hasZeroedGantry = true;
