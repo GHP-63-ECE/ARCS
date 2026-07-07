@@ -27,6 +27,7 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
 void setGantryPower(int power);
 void updateEncoderGantry();
 bool setGantryPosition(int targetPos, int maxSpeed);
+int readEncoderExtruder();
 
 // MARK: Pinout
 
@@ -63,6 +64,7 @@ const int ENCGANB = 39; // 2nd Encoder Pin for Gantry
 const int ENCEXTA = 2;
 const int ENCEXTB = 15;
 
+
 byte servoPin = 13; // signal pin for the ESC.
 
 Servo servo;
@@ -70,6 +72,7 @@ PID pidController = PID();
 PID leftDrivePID = PID();
 PID rightDrivePID = PID();
 PID pidControllerGantry = PID();
+PID pidControllerExt = PID();
 BluetoothSerial BS;
 
 // MARK: Variables
@@ -82,8 +85,15 @@ double kD = 0.0;
 double kP_gantry = 0.1;
 double kI_gantry = 0;
 double kD_gantry = 0;
+
+double kP_ext = 0.1;
+double kI_ext = 0;
+double kD_ext = 0;
+
 int cx = 0.85;
 int cy = 0.2;
+float ax[5] = {0,0,0,0,0};
+float ay[5];
 
 bool autonomous = false;
 
@@ -124,8 +134,7 @@ const float cameraFOVHeightMM = 70.0; // Height of the camera's field of view in
 int pwrGantry = 100;
 int pwrExt = 100;
 
-
-// MARK: ESP-NOW Comms
+// MARK: Structs
 
 // Structure example to receive data
 // Must match the sender structure
@@ -138,6 +147,10 @@ bool button1;
 bool button2;
 bool button3;
 } struct_message;
+
+// MARK: ESP-NOW Comms
+
+
 
 // Create a struct_message called joystickData
 struct_message joystickData = {1950, 1950, 1950, 1950, true, true, true};
@@ -160,6 +173,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   // Serial.println(joystickData.button2);
   // Serial.print("Button3: ");
   // Serial.println(joystickData.button3);
+  
   // Serial.println();
 }
 
@@ -334,17 +348,25 @@ void turnDegrees(float degrees, int speed) {
 // Origin Coordinates
 float cameraXOrigin = 0.5; // Normalized X coordinate of the camera's origin 
 float cameraYOrigin = -2; // Normalized Y coordinate of the camera's origin
-float cameraToRobotCenterMM = 85; // TODO
-float gantryDistanceToRobotCenterMM = 100; // TODO
-float minGantryPositionMM = -(185.7 / 2);
+float cameraToRobotCenterMM = 87; // TODO
+float gantryDistanceToRobotCenterMM = 94; // TODO
+float minGantryX_MM = -(185.7 / 2);
 
-float getGantryPosition() {
-
+float getGantryX() {
+  noInterrupts();
+  long gantryTicks = encoderValueGantry;
+  interrupts();
+  return gantryTicks*gantryTicksPerMM + minGantryX_MM;
 }
 
 float normalizedToRobotRelativeX(float x) {
   float x_mm = (x - 0.5) * cameraFOVWidthMM;
   return x_mm;
+}
+
+float normalizedToRobotRelativeY(float y) {
+  float y_mm = (0.5 - y) * cameraFOVHeightMM;
+  return y_mm;
 }
 
 // Calculating distance to the center of a crack based on normalized coordinates (cx, cy) of the crack in the camera's field of view
@@ -419,6 +441,65 @@ void driveToCrackCenter(float cx, float cy) {
 
   // Rotate back to forwards
   turnDegrees(-angle, turnSpeed);
+}
+
+void driveToCrackCenterNoRot(float cx, float cy){
+  float distance = distanceToCrackCenter(cx, cy);
+  float angle = angleToCrackCenter(cx, cy);
+
+  if (angle > 90) {
+    angle -= 180;
+    distance = -distance;
+  } else if (angle < -90) {
+    angle += 180;
+    distance = -distance;
+  }
+
+  Serial.print("Driving to crack center: distance = ");
+  Serial.print(distance);
+  Serial.print(" mm, angle = ");
+  Serial.print(angle);
+  Serial.println(" degrees");
+
+  // Rotate to face the crack center
+  turnDegrees(angle, turnSpeed);
+  
+  // Drive forward to the crack center
+  driveDistance(distance, movementSpeed);
+}
+
+void driveToCoordinate(float x, float y) {
+  float distance = sqrt(x*x+y*y);
+  float angle = atan2(x, y) * (180 / PI);;
+
+  if (angle > 90) {
+    angle -= 180;
+    distance = -distance;
+  } else if (angle < -90) {
+    angle += 180;
+    distance = -distance;
+  }
+
+  Serial.print("Driving to crack center: distance = ");
+  Serial.print(distance);
+  Serial.print(" mm, angle = ");
+  Serial.print(angle);
+  Serial.println(" degrees");
+
+  // Rotate to face the crack center
+  turnDegrees(angle, turnSpeed);
+  
+  // Drive forward to the crack center
+  driveDistance(distance, movementSpeed);
+}
+
+void getPointAToPointB(float ax, float ay, float bx, float by) {
+  
+}
+
+void getExtruderToPoint(float x, float y) {
+  // Checking if the point is in range of the gantry
+
 }
 
 
@@ -551,7 +632,7 @@ long readEncoderGantry() {
 }
 
 bool setGantryPosition(int targetPosMM, int maxSpeed) {
-  int targetPos = targetPosMM * gantryTicksPerMM;
+  int targetPos = (targetPosMM - minGantryX_MM) * gantryTicksPerMM;
   targetPos = constrain(targetPos, minGantryPosition, maxGantryPosition);
   long startLeft = readEncoderGantry();
 
@@ -608,7 +689,7 @@ bool homeGantryPosition() {
   // while (currentPos)
 }
 
-// MARK: Encoder Functions
+// MARK: Extruder Functions
 
 void extDirectionForward() {
   digitalWrite(EXT1, HIGH);
@@ -638,35 +719,38 @@ void setExtruderPower(int power) {
   analogWrite(PWM_EXT, power);
 }
 
-bool setExtruderPosition(int targetPos, int maxSpeed){
+bool setExtruderPosition(int targetPosMM, int maxSpeed){
+  int targetPos = targetPosMM * gantryTicksPerMM;
   targetPos = constrain(targetPos, minGantryPosition, maxGantryPosition);
-  long startLeft = readEncoderGantry();
+  long startLeft = readEncoderExtruder();
 
   while (true) {
-    long current = readEncoderGantry();
+    long current = readEncoderExtruder();
     long error = targetPos - current;
 
     bool atTarget = abs(error) <= encoderToleranceTicks;
 
-    Serial.print("Gantry Error: ");
+    Serial.print("Extruder Error: ");
     Serial.print(error);
     if (atTarget) {
       stopGantry();
       return true;
     }
     
-    pidControllerGantry.UpdateError(error);
-    double output = pidControllerGantry.TotalError();
-    Serial.print(" Gantry PID Output: ");
+    pidControllerExt.UpdateError(error);
+    double output = pidControllerExt.TotalError();
+    Serial.print(" Extruder PID Output: ");
     Serial.print(output);
 
     int speed = atTarget ? 0 : pidOutputToSpeed(output, error, maxSpeed);
     setGantryPower(speed);
-    Serial.print(" Gantry Speed: ");
+    Serial.print(" Extruder Speed: ");
     Serial.println(speed);
     delay(movementLoopDelayMs);
   }
 }
+
+// MARK: Encoder Updates
 
 void updateEncoderLeft(){
   if (digitalRead(ENCAFL) > digitalRead(ENCBFL))
@@ -695,6 +779,23 @@ void updateEncoderExtruder(){
   } else{
     encoderValueExtruder--;
   }
+}
+
+int readEncoderExtruder(){
+  return encoderValueExtruder;
+}
+
+bool followPath(float ax[], float ay[]){
+  bool proceed = false;
+  for(int i = 4; i >= 0; i--){
+    if(ax[i] == -1 && ay[i] == -1){
+      Serial.println("No crack Detected");
+      return false;
+    }
+    driveToCrackCenterNoRot(ax[i], ay[i]);
+    gantryAlign(ax[i]);
+  }
+  return true;
 }
 
 bool crackAuto() {
@@ -735,6 +836,67 @@ bool testAutoDrive() {
       }
       Serial.println("Aligned");
     return true;
+}
+
+void updateVision(){
+  if (BS.available() > 0) {
+    String rawData = BS.readStringUntil('\n');
+    rawData.trim();
+    if (rawData.length() > 0) {
+      int cxIndex = rawData.indexOf("cx");
+      int cyIndex = rawData.indexOf("cy");
+      int xIndex = rawData.indexOf("x1");
+      String xData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
+      String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
+      cx = xData.toFloat();
+      cy = yData.toFloat();
+    Serial.println(rawData);
+    }
+  }
+}
+
+void updateVisionArray(){
+  if (BS.available() > 0){
+    String rawData = BS.readStringUntil('\n');
+    rawData.trim();
+    if(rawData.length() > 0){
+      int x1Index = rawData.indexOf("x1");
+      int x2Index = rawData.indexOf("x2");
+      int x3Index = rawData.indexOf("x3");
+      int x4Index = rawData.indexOf("x4");
+      int cxIndex = rawData.indexOf("cx");
+
+      int y1Index = rawData.indexOf("y1");
+      int y2Index = rawData.indexOf("y2");
+      int y3Index = rawData.indexOf("y3");
+      int y4Index = rawData.indexOf("y4");
+      int cyIndex = rawData.indexOf("cy");
+      
+      String x1Data = rawData.substring(x1Index + 4, x2Index - x1Index - 3);
+      String x2Data = rawData.substring(x2Index + 4, x3Index - x2Index - 3);
+      String x3Data = rawData.substring(x3Index + 4, x4Index - x3Index - 3);
+      String x4Data = rawData.substring(x4Index + 4, cxIndex - x4Index - 3);
+      String cxData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
+
+      String y1Data = rawData.substring(cyIndex + 4, cxIndex - cyIndex - 3);
+      String y2Data = rawData.substring(y1Index + 4, y2Index - y1Index - 3);
+      String y3Data = rawData.substring(y2Index + 4, y3Index - y2Index - 3);
+      String y4Data = rawData.substring(y3Index + 4, y4Index - y3Index - 3);
+      String cyData = rawData.substring(y4Index + 4, y3Index - y4Index - 3);
+      
+      ax[0] = cxData.toFloat();
+      ax[1] = x1Data.toFloat();
+      ax[2] = x2Data.toFloat();
+      ax[3] = x3Data.toFloat();
+      ax[4] = x4Data.toFloat();
+
+      ay[0] = y1Data.toFloat();
+      ay[1] = y2Data.toFloat();
+      ay[2] = y3Data.toFloat();
+      ay[3]= y4Data.toFloat();
+      ay[4] = y4Data.toFloat();
+    }
+  }
 }
 
 // MARK: Setup
@@ -785,6 +947,7 @@ void setup() {
   pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
   leftDrivePID.Init(kP, kI, kD);
   rightDrivePID.Init(kP, kI, kD);
+  pidControllerExt.Init(kP_ext, kI_ext, kD_ext);
 
   // Turn off motors initially
   stopAllDriveMotors();
@@ -820,14 +983,14 @@ int edfIncrementResolution = 10;
 int edfIncrement = 0;
 int joystickDeadzone = 50;
 bool killEverything = false;
-bool joystickConnected = false;
+bool joystickConnected = true;
 
 void loop() {
-
+  // forwards();
   // homeGantryPosition();
   // driveToCrackCenter(0.5, 0.5);
   // gantryAlign(0.5);
-  // // crackAuto();
+  // crackAuto();
   // while (true){}
   // forwards();
   // turnDegrees(90, 200);
@@ -842,7 +1005,6 @@ void loop() {
   // delay(1000);
 
   // testAutoDrive();
-  // forwards();
 
   // MARK: Joystick Code
   
@@ -896,6 +1058,7 @@ void loop() {
     // else if (button2State == 0 && button1State == 0) {
     //   autonomous = true;
     // }
+    Serial.print("Setting Speed");
     setSpeed(leftVal, rightVal);
     setGantryPower(gantryVal);
   }
