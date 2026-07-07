@@ -102,7 +102,8 @@ int targetPositionLeft;
 
 int targetPositionGantry;
 int minGantryPosition = 0;
-int maxGantryPosition = 10520;
+int maxGantryPosition = 9996;
+float gantryTicksPerMM = 9996 / 185.7;
 bool hasZeroedGantry = false;
 
 int targetPositionExtruder;
@@ -209,21 +210,21 @@ int pidOutputToSpeed(double output, long error, int maxSpeed) {
 
   int pwm = abs(output);
 
-  Serial.print(" PWM Before Constrain: ");
-  Serial.print(pwm);
+  // Serial.print(" PWM Before Constrain: ");
+  // Serial.print(pwm);
 
-  Serial.print(" Max Speed: ");
-  Serial.print(maxSpeed);
-  Serial.print(" PWM > Max Speed: ");
-  Serial.print(pwm > maxSpeed);
+  // Serial.print(" Max Speed: ");
+  // Serial.print(maxSpeed);
+  // Serial.print(" PWM > Max Speed: ");
+  // Serial.print(pwm > maxSpeed);
   if (pwm > maxSpeed) {
     pwm = maxSpeed;
   }
   
-  Serial.print(" PID Output: ");
-  Serial.print(output);
-  Serial.print(" PWM: ");
-  Serial.print(pwm);
+  // Serial.print(" PID Output: ");
+  // Serial.print(output);
+  // Serial.print(" PWM: ");
+  // Serial.print(pwm);
 
 
   int speedFloor = min(minimumPIDSpeed, maxSpeed);
@@ -338,7 +339,7 @@ void turnDegrees(float degrees, int speed) {
 
 // Origin Coordinates
 float cameraXOrigin = 0.5; // Normalized X coordinate of the camera's origin 
-float cameraYOrigin = 0.5; // Normalized Y coordinate of the camera's origin
+float cameraYOrigin =-2; // Normalized Y coordinate of the camera's origin
 
 // Calculating distance to the center of a crack based on normalized coordinates (cx, cy) of the crack in the camera's field of view
 float distanceToCrackCenter(float cx, float cy) {
@@ -374,10 +375,12 @@ float angleToCrackCenter(float cx, float cy) {
 void gantryAlign(float cx){
   
   // Convert normalized pixel coordinates to millimeters
-  float x_mm = ((cx - 0.5) * cameraFOVWidthMM)+100;
+  float x_mm = ((cx - 0.5) * cameraFOVWidthMM) + 92;
 
   // Calculate the distance to move the gantry based on the x_mm value
   float distanceToMove = x_mm; // Assuming 1:1 mapping for simplicity, adjust as necessary
+  Serial.print("Distance To Move");
+  Serial.println(distanceToMove);
 
   // Move the gantry to align with the crack center
   setGantryPosition(distanceToMove, 100);
@@ -387,6 +390,14 @@ void gantryAlign(float cx){
 void driveToCrackCenter(float cx, float cy) {
   float distance = distanceToCrackCenter(cx, cy);
   float angle = angleToCrackCenter(cx, cy);
+
+  if (angle > 90) {
+    angle -= 180;
+    distance = -distance;
+  } else if (angle < -90) {
+    angle += 180;
+    distance = -distance;
+  }
 
   Serial.print("Driving to crack center: distance = ");
   Serial.print(distance);
@@ -399,6 +410,9 @@ void driveToCrackCenter(float cx, float cy) {
   
   // Drive forward to the crack center
   driveDistance(distance, movementSpeed);
+
+  // Rotate back to forwards
+  turnDegrees(-angle, turnSpeed);
 }
 
 
@@ -530,7 +544,8 @@ long readEncoderGantry() {
   return value;
 }
 
-bool setGantryPosition(int targetPos, int maxSpeed) {
+bool setGantryPosition(int targetPosMM, int maxSpeed) {
+  int targetPos = targetPosMM * gantryTicksPerMM;
   targetPos = constrain(targetPos, minGantryPosition, maxGantryPosition);
   long startLeft = readEncoderGantry();
 
@@ -540,8 +555,8 @@ bool setGantryPosition(int targetPos, int maxSpeed) {
 
     bool atTarget = abs(error) <= encoderToleranceTicks;
 
-    Serial.print("Gantry Error: ");
-    Serial.print(error);
+    // Serial.print("Gantry Error: ");
+    // Serial.print(error);
     if (atTarget) {
       stopGantry();
       return true;
@@ -549,13 +564,13 @@ bool setGantryPosition(int targetPos, int maxSpeed) {
     
     pidControllerGantry.UpdateError(error);
     double output = pidControllerGantry.TotalError();
-    Serial.print(" Gantry PID Output: ");
-    Serial.print(output);
+    // Serial.print(" Gantry PID Output: ");
+    // Serial.print(output);
 
     int speed = atTarget ? 0 : pidOutputToSpeed(output, error, maxSpeed);
     setGantryPower(speed);
-    Serial.print(" Gantry Speed: ");
-    Serial.println(speed);
+    // Serial.print(" Gantry Speed: ");
+    // Serial.println(speed);
     delay(movementLoopDelayMs);
   }
 }
@@ -678,7 +693,7 @@ void updateEncoderExtruder(){
 
 bool crackAuto() {
   while(true) {
-    if(cx == 0 && cy == 0) {
+    if(cx == -1 && cy == -1) {
       Serial.println("No Crack Detected");
       return false;
     }
@@ -797,6 +812,12 @@ bool killEverything = false;
 bool joystickConnected = false;
 
 void loop() {
+
+  honeGantryPosition();
+  driveToCrackCenter(0.5, 0.5);
+  gantryAlign(0.5);
+  // crackAuto();
+  while (true){}
   // forwards();
   // turnDegrees(90, 200);
   // while (true) {}
@@ -809,7 +830,8 @@ void loop() {
   // setGantryPower(0);
   // delay(1000);
 
-  testAutoDrive();
+  // testAutoDrive();
+  // forwards();
 
   // MARK: Joystick Code
   /*
