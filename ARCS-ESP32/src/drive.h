@@ -1,7 +1,7 @@
 #ifndef drive_h
 #include <Arduino.h>
 #define drive_h
-class drive{
+class drive { 
 public:
   int PWMFL;
   int FL1;

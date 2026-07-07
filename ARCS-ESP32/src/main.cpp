@@ -7,6 +7,7 @@
 
 // MARK: Function prototypes 
 // because c++ is a liar
+
 void stopAllDriveMotors();
 void setSpeed(int speedA, int speedB);
 void updateEncoderLeft();
@@ -39,6 +40,16 @@ const int PWMR = 19;
 const int R1 = 18;
 const int R2 = 5;
 
+// Gantry Motor Pins
+const int ENI = 25;
+const int Gantry1 = 27;
+const int Gantry2 = 26; 
+
+// Extruder Motor Pins
+const int PWM_EXT = 14;
+const int EXT1 = 12;
+const int EXT2 = 4;
+
 // Encoder Connections
 const int ENCAFL = 34; // Encoder A pin for Front Left Motor
 const int ENCBFL = 35; // Encoder B pin for Front Left Motor
@@ -51,18 +62,6 @@ const int ENCGANB = 39; // 2nd Encoder Pin for Gantry
 
 const int ENCEXTA = 2;
 const int ENCEXTB = 15;
-
-
-
-// Gantry Motor Pins
-const int ENI = 25;
-const int Gantry1 = 27;
-const int Gantry2 = 26; 
-
-// Extruder Motor Pins
-const int PWM_EXT = 14;
-const int EXT1 = 12;
-const int EXT2 = 4;
 
 byte servoPin = 13; // signal pin for the ESC.
 Servo servo;
@@ -89,13 +88,10 @@ int cy = 0.2;
 
 bool autonomous = false;
 
-
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
 volatile long encoderValueGantry = 0;
 volatile long encoderValueExtruder = 0;
-
-
 
 int targetPositionRight;
 int targetPositionLeft;
@@ -123,8 +119,8 @@ const int encoderToleranceTicks = 15;
 const int minimumPIDSpeed = 55;
 const unsigned long movementLoopDelayMs = 10;
 
-const float cameraFOVWidthMM = 95.0; // Width of the camera's field of view in millimeters - TODO
-const float cameraFOVHeightMM = 70.0; // Height of the camera's field of view in millimeters - TODO
+const float cameraFOVWidthMM = 95.0; // Width of the camera's field of view in millimeters 
+const float cameraFOVHeightMM = 70.0; // Height of the camera's field of view in millimeters 
 
 int pwrGantry = 100;
 int pwrExt = 100;
@@ -579,7 +575,7 @@ bool isAtTargetPositionGantry() {
   return abs(targetPositionGantry - encoderValueGantry) < 5;
 }
 
-bool honeGantryPosition() {
+bool homeGantryPosition() {
   int previousGantryPos = readEncoderGantry();
   setGantryPower(-50); // Move gantry backward slowly
   delay(1000);
@@ -758,6 +754,8 @@ void setup() {
   pinMode(ENCBFR, INPUT);
   pinMode(ENCGANA, INPUT);
   pinMode(ENCGANB, INPUT);
+  pinMode(ENCEXTA, INPUT);
+  pinMode(ENCEXTB, INPUT);
 
   // Set encoder pins to interrupts
   attachInterrupt(digitalPinToInterrupt(ENCAFL), updateEncoderLeft, RISING);
@@ -765,16 +763,19 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ENCAFR), updateEncoderRight, RISING);
 
   attachInterrupt(digitalPinToInterrupt(ENCGANA), updateEncoderGantry, RISING);
-  
-  pidController.Init(kP, kI, kD);
-  pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
 
+  attachInterrupt(digitalPinToInterrupt(ENCEXTA), updateEncoderGantry, RISING);
+  
   servo.attach(servoPin);
   servo.writeMicroseconds(1100); // send "stop" signal to ESC. Also necessary to arm the ESC.
   Serial.println("ESC TEST PREP");
   
+  // Do we even need these inits?
+  pidController.Init(kP, kI, kD);
+  pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
   leftDrivePID.Init(kP, kI, kD);
   rightDrivePID.Init(kP, kI, kD);
+
   // Turn off motors initially
   stopAllDriveMotors();
 
@@ -813,7 +814,7 @@ bool joystickConnected = false;
 
 void loop() {
 
-  honeGantryPosition();
+  homeGantryPosition();
   driveToCrackCenter(0.5, 0.5);
   gantryAlign(0.5);
   // crackAuto();
