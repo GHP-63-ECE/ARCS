@@ -834,7 +834,7 @@ void loop() {
   // forwards();
 
   // MARK: Joystick Code
-  /*
+  
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
   int rightVal=map(joystickData.vy3, 0, 4095, -255, 255);
   int gantryVal=map(joystickData.vx2, 0, 4095, -255, 255);
@@ -901,7 +901,7 @@ void loop() {
   Serial.print(" Kill Everything: ");
   Serial.print(killEverything);
   Serial.println();
-  */
+  
   
   // // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
