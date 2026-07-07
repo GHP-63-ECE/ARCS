@@ -1,39 +1,44 @@
-
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
-#include <ESP32Servo.h>
-
 
 // Replace with the receiver's MAC address
-uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4e, 0x03, 0x98}; //  70:4b:ca:4e:03:98
-
+uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4d, 0x99, 0x04}; //  70:4b:ca:4d:99:04
 
 const int vy1Pin = 33;
 const int vy2Pin = 32;
 const int vy3Pin = 34;
+const int vx2Pin = 35;
 const int button1Pin = 5;
 const int button2Pin = 18;
 const int button3Pin = 19;
-byte servoPin = 15;
-Servo servo;
+
+// External buttons
+const int button4Pin = 21;
+const int button5Pin = 22;
 
 int vy1Value = 0;
 int vy2Value = 0;
 int vy3Value = 0;
+int vx2Value = 0;
 bool button1Value = false;
 bool button2Value = false;
 bool button3Value = false;
-
+bool button4Value = false;
+bool button5Value = false;
+String lastPacketStatus = "";
 // Structure example to send data
 // Must match the receiver structure
 typedef struct struct_message {
   int vy1;
   int vy2;
   int vy3;
+  int vx2;
   bool button1;
   bool button2;
   bool button3;
+  bool button4;
+  bool button5;
 } struct_message;
 
 // Create a struct_message called myData
@@ -43,29 +48,28 @@ esp_now_peer_info_t peerInfo;
 
 // callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-//  Serial.print("\r\nLast Packet Send Status:\t");
- // Serial.print(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail ");
+  lastPacketStatus = " Last Packet Send Status:\t";
+  lastPacketStatus += (status == ESP_NOW_SEND_SUCCESS ? "Delivery Success " : "Delivery Fail   ");
 }
  
 void setup() {
   // Init Serial Monitor
   Serial.begin(115200);
-  pinMode(vy1Pin, INPUT);
-  pinMode(vy2Pin, INPUT);
-  pinMode(vy3Pin, INPUT);
+  pinMode(vy1Pin, INPUT_PULLUP);
+  pinMode(vy2Pin, INPUT_PULLUP);
+  pinMode(vy3Pin, INPUT_PULLUP);
   pinMode(button1Pin, INPUT_PULLUP);
   pinMode(button2Pin, INPUT_PULLUP);
   pinMode(button3Pin, INPUT_PULLUP);
+  pinMode(button4Pin, INPUT_PULLUP);
+  pinMode(button5Pin, INPUT_PULLUP);
 
-  pinMode(servoPin, OUTPUT);
-  servo.attach(servoPin);
- 
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
-    // Serial.print("Error initializing ESP-NOW ");
+    Serial.println("Error initializing ESP-NOW");
     return;
   }
 
@@ -80,137 +84,65 @@ void setup() {
   
   // Add peer        
   if (esp_now_add_peer(&peerInfo) != ESP_OK){
-    // Serial.println("Failed to add peer");
+    Serial.println("Failed to add peer");
     return;
   }
 }
-
-const int edfPowerMin = 1100;
-const int edfPowerMax = 1900;
-const int edfJoystickDefault = 1950;
-int edfPower = edfPowerMin;
-int edfIncrementMax = 5;
-int edfIncrement = 0;
-
  
 void loop() {
 
   vy1Value = analogRead(vy1Pin);
   vy2Value = analogRead(vy2Pin);
   vy3Value = analogRead(vy3Pin);
+  vx2Value = analogRead(vx2Pin);
   Serial.print("VY1: ");
   Serial.print(vy1Value);
   Serial.print(" VY2: ");
   Serial.print(vy2Value);
   Serial.print(" VY3: ");
   Serial.print(vy3Value);
+  Serial.print(" VX2: ");
+  Serial.print(vx2Value);
+  Serial.print(" Button1: ");
+  Serial.print(button1Value);
+  Serial.print(" Button2: ");
+  Serial.print(button2Value);
+  Serial.print(" Button3: "); 
+  Serial.print(button3Value);
+  Serial.print(" Button4: ");
+  Serial.print(button4Value);
+  Serial.print(" Button5: ");
+  Serial.print(button5Value);
+  Serial.print(lastPacketStatus);
 
   button1Value = digitalRead(button1Pin);
   button2Value = digitalRead(button2Pin);
   button3Value = digitalRead(button3Pin);
+  // external buttons
+  button4Value = digitalRead(button4Pin);
+  button5Value = digitalRead(button5Pin);
   // Set values to send
   myData.vy1 = vy1Value;
   myData.vy2 = vy2Value;
   myData.vy3 = vy3Value;
+  myData.vx2 = vx2Value;
   myData.button1 = button1Value;
   myData.button2 = button2Value;
   myData.button3 = button3Value;
+  // external buttons
+  myData.button4 = button4Value;
+  myData.button5 = button5Value;
 
-  edfIncrement = 0;
-  if (myData.vy3 < edfJoystickDefault) {
-    edfIncrement=map(myData.vy3, 0, edfJoystickDefault-200, -edfIncrementMax, 0);
-  } else {
-    edfIncrement=map(myData.vy3, edfJoystickDefault+100, 4095, 0, edfIncrementMax);
-  }
-  bool button3State=myData.button3;
-  bool button2State=myData.button2;
-  bool escButtonState=myData.button1;
-
-  if (escButtonState == 0) {
-    edfPower += edfIncrement;
-    edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
-    
-    servo.writeMicroseconds(edfPower); // output to edfs
-  }
-  Serial.print(" EDF Increment: ");
-  Serial.print(edfIncrement);
-  Serial.print(" EDF Power: ");
-  Serial.print(edfPower);
- 
-  
   // Send message via ESP-NOW
   esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
    
   // if (result == ESP_OK) {
-  //   Serial.print("Sent with success ");
+  //   Serial.print(" Sent with success      ");
   // }
   // else {
-  //   Serial.print("Error sending the data ");
+  //   Serial.print(" Error sending the data ");
   // }
 
-  Serial.println();
+  Serial.println(); 
 
 }
-/*
-
-#include <esp_now.h>
-#include <WiFi.h>
-
-// Structure example to receive data
-// Must match the sender structure
-typedef struct struct_message {
-int vy1;
-int vy2;
-int vy3;
-bool button1;
-bool button2;
-bool button3;
-} struct_message;
-
-
-// Create a struct_message called myData
-struct_message myData;
-
-// callback function that will be executed when data is received
-void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
-  memcpy(&myData, incomingData, sizeof(myData));
-  Serial.print("Bytes received: ");
-  Serial.println(len);
-  Serial.print("VY1 ");
-  Serial.println(myData.vy1);
-  Serial.print("VY2 ");
-  Serial.println(myData.vy2);
-  Serial.print("VY3 ");
-  Serial.println(myData.vy3);
-  Serial.print("Button1: ");
-  Serial.println(myData.button1);
-  Serial.print("Button2: ");
-  Serial.println(myData.button2);
-  Serial.print("Button3: ");
-  Serial.println(myData.button3);
-  Serial.println();
-}
- 
-void setup() {
-  // Initialize Serial Monitor
-  Serial.begin(115200);
-  
-  // Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
-
-  // Init ESP-NOW
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
-  
-  // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info
-  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
-}
- 
-void loop() {
-
-}
-
-*/
