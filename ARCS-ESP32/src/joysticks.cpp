@@ -3,15 +3,14 @@
 #include <esp_now.h>
 
 // Replace with the receiver's MAC address
-uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4d, 0x99, 0x04}; //  70:4b:ca:4d:99:04
+uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4e, 0x03, 0x98}; //  70:4b:ca:4e:03:98
 
-const int vy1Pin = 33;
-const int vy2Pin = 32;
-const int vy3Pin = 34;
-const int vx2Pin = 35;
-const int button1Pin = 5;
-const int button2Pin = 18;
-const int button3Pin = 19;
+const int vy1Pin = 0;
+const int vy2Pin = 1;
+const int vy3Pin = 2;
+const int button1Pin = 16;
+const int button2Pin = 23;
+const int button3Pin = 22;
 
 // External buttons
 const int button4Pin = 21;
@@ -94,7 +93,6 @@ void loop() {
   vy1Value = analogRead(vy1Pin);
   vy2Value = analogRead(vy2Pin);
   vy3Value = analogRead(vy3Pin);
-  vx2Value = analogRead(vx2Pin);
   Serial.print("VY1: ");
   Serial.print(vy1Value);
   Serial.print(" VY2: ");
