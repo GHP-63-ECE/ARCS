@@ -32,14 +32,14 @@ int readEncoderExtruder();
 // MARK: Pinout
 
 // Left Motor Pins
-const int PWML = 23; 
-const int L1 = 21; // const int L1 = 22;
-const int L2 = 22; // const int L2 = 21;
+const int PWMR = 23; 
+const int R1 = 21; // const int L1 = 22;
+const int R2 = 22; // const int L2 = 21;
 
 // Right Motor Pins
-const int PWMR = 19; 
-const int R1 = 18;
-const int R2 = 5;
+const int PWML = 19; 
+const int L1 = 18;
+const int L2 = 5;
 
 // Gantry Motor Pins
 const int ENI = 25;
@@ -80,7 +80,7 @@ BluetoothSerial BS;
 // Drivetrain PID values
 double kP = 0.45;
 double kI = 0.0035; 
-double kD = 0.0;
+double kD = 0.0; // we dont need a big d
 
 double kP_gantry = 0.1;
 double kI_gantry = 0;
@@ -92,10 +92,12 @@ double kD_ext = 0;
 
 int cx = 0.85;
 int cy = 0.2;
-float ax[5] = {0,0,0,0,0};
-float ay[5];
+float ax[5] = {0.1,0.3,0.5,0.7,0.9};
+float ay[5] = {0.2, 0.25, 0.45, 0.7, 0.8};
 
 bool autonomous = false;
+bool prevButton4State = false;
+bool prevButton5State = false;
 
 volatile long encoderValueLeft = 0;
 volatile long encoderValueRight = 0;
@@ -146,6 +148,8 @@ int vx2;
 bool button1;
 bool button2;
 bool button3;
+bool button4;
+bool button5;
 } struct_message;
 
 // MARK: ESP-NOW Comms
@@ -172,7 +176,11 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   // Serial.print("Button2: ");
   // Serial.println(joystickData.button2);
   // Serial.print("Button3: ");
-  // Serial.println(joystickData.button3);
+  // Serial.print(joystickData.button3);
+  // Serial.print("Button4: ");
+  // Serial.println(joystickData.button4);
+  // Serial.print("Button5: ");
+  // Serial.println(joystickData.button5);
   
   // Serial.println();
 }
@@ -208,7 +216,7 @@ long readEncoderRight() {
 }
 
 long distanceToEncoderTicks(float distanceMm) {
-  return lround((distanceMm / wheelCircumference) * ticksPerRotation);
+  return lround((distanceMm / wheelCircumference) * ticksPerRotation)/10;
 }
 
 int pidOutputToSpeed(double output, long error, int maxSpeed) {
@@ -323,8 +331,8 @@ bool runToEncoderTargets(long leftTargetTicks, long rightTargetTicks, int speed)
     if (leftTargetTicks == -rightTargetTicks) {
       // If turning, ensure both motors are moving at the same speed
       setSpeed(leftSpeed, -leftSpeed);
-      Serial.print("Output Speed:");
-      Serial.println(leftSpeed);
+      // Serial.print("Output Speed:");
+      // Serial.println(leftSpeed);
     } else {
       setSpeed(leftSpeed, rightSpeed);
     }
@@ -347,7 +355,7 @@ void turnDegrees(float degrees, int speed) {
 
 // Origin Coordinates
 float cameraXOrigin = 0.5; // Normalized X coordinate of the camera's origin 
-float cameraYOrigin = -2; // Normalized Y coordinate of the camera's origin
+float cameraYOrigin = 0.5;//-2; // Normalized Y coordinate of the camera's origin
 float cameraToRobotCenterMM = 87; // TODO
 float gantryDistanceToRobotCenterMM = 94; // TODO
 float minGantryX_MM = -(185.7 / 2);
@@ -792,8 +800,19 @@ bool followPath(float ax[], float ay[]){
       Serial.println("No crack Detected");
       return false;
     }
+
+    if(i != 4){
+      float aax[5];
+      float aay[5];
+      aax[i] = ax[i] + (0.5-ax[i+1]);
+      aay[i] = ay[i] + (0.5-ay[i+1]);
+      Serial.println("AX: " + String(aax[i]));
+      Serial.println("AY: " + String(aay[i]));
+      driveToCrackCenterNoRot(aax[i], aay[i]);
+    } else{
     driveToCrackCenterNoRot(ax[i], ay[i]);
-    gantryAlign(ax[i]);
+    }
+    // gantryAlign(ax[i]);
   }
   return true;
 }
@@ -986,6 +1005,9 @@ bool killEverything = false;
 bool joystickConnected = true;
 
 void loop() {
+
+  // followPath(ax, ay);
+  // while(true){}
   // forwards();
   // homeGantryPosition();
   // driveToCrackCenter(0.5, 0.5);
@@ -1008,9 +1030,12 @@ void loop() {
 
   // MARK: Joystick Code
   
+  
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
   int rightVal=map(joystickData.vy3, 0, 4095, -255, 255);
   int gantryVal=map(joystickData.vx2, 0, 4095, -255, 255);
+  int extVal = map(joystickData.vy2, 0, 4095, -255, 255);
+  
   if (abs(leftVal) < joystickDeadzone) {
     leftVal = 0;
   }
@@ -1020,9 +1045,14 @@ void loop() {
   if (abs(gantryVal) < joystickDeadzone) {
     gantryVal = 0;
   }
+  if (abs(extVal) < joystickDeadzone) {
+    extVal = 0;
+  }
   bool button3State=joystickData.button3;
   bool button2State=joystickData.button2;
   bool button1State=joystickData.button1;
+  bool button4State=joystickData.button4;
+  bool button5State=joystickData.button5;
 
   edfIncrement = 0;
   if (joystickData.vy3 < edfJoystickDefault) {
@@ -1055,12 +1085,11 @@ void loop() {
       edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
       servo.writeMicroseconds(edfPower); // output to edfs
     } 
-    // else if (button2State == 0 && button1State == 0) {
-    //   autonomous = true;
-    // }
+
     Serial.print("Setting Speed");
     setSpeed(leftVal, rightVal);
     setGantryPower(gantryVal);
+    setExtruderPower(extVal);
   }
   
   Serial.print(" EDF Increment: ");
@@ -1078,7 +1107,8 @@ void loop() {
   Serial.println();
   
   
-  // // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
+  
+  // // Serial.println(encoderValueLeft + " hello " + encoderValueRight); // LINE OF DOOOOOOOOOOOOOOOOOOOMMMMMMMMMMM ONLY UNCOMMENT IN CASE OF EMERGENCY
 
   // // driveDistance(700, 255);
 
@@ -1106,23 +1136,18 @@ void loop() {
   //   Serial.println(rawData);
   //   }
   // }
+//   
+if(button4State == LOW && prevButton4State == HIGH){
+autonomous = true;
+followPath(ax, ay);
+autonomous = false;
+button4State = prevButton4State;
+}
 
-  // if(autonomous){
-  //   if(cx == 0 && cy == 0){
-  //   if(isDriveAligned()){
-  //     Serial.println("Drive aligned with crack center");
-  //     }
-  //   } else {
-  //     // driveToCrackCenter(cx, cy);
-  //   }
-  // }
-
-  // turnDegrees(180 , 200);
-  // turnDegrees2(90);
-
-
-  // setSpeed(255, 255);
-
+if(button5State == LOW && prevButton5State == HIGH){
+gantryAlign(cx);
+button5State = prevButton5State;
+}
   // Serial.print(String((ENCAFR)));
   // Serial.print(", ");
   // Serial.print(String(digitalRead(ENCBFR)));
