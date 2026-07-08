@@ -487,9 +487,6 @@ void loop() {
   forwards();
 
   while (true){}
-  // forwards();
-  // turnDegrees(90, 200);
-  // while (true) {}
 
   // MARK: Joystick Code
   
@@ -501,6 +498,7 @@ void loop() {
   if (abs(rightVal) < joystickDeadzone) {
     rightVal = 0;
   }
+
   bool button3State=joystickData.button3;
   bool button2State=joystickData.button2;
   bool button1State=joystickData.button1;
@@ -512,10 +510,10 @@ void loop() {
     edfIncrement=map(joystickData.vy2, edfJoystickDefault+100, 4095, 0, edfIncrementResolution);
   }
 
-
   edfIncrement = -edfIncrement;
   edfIncrement /= edfIncrementResolution; // Normalize to -1 to 1
   edfIncrement *= 3;
+
   if(button1State == 0){
     killEverything = false;
     autonomous = false;
@@ -553,18 +551,10 @@ void loop() {
   
   // // Serial.println(encoderValueLeft + " hello " + encoderValueRight);
 
-  // // driveDistance(700, 255);
-
   // // Serial.print(String(encoderValueLeft));
   // // Serial.print(", ");
   // // Serial.print(String(encoderValueRight));
   // // Serial.print(", ");
-
-  // turnDegrees(180 , 200);
-  // turnDegrees2(90);
-
-
-  // setSpeed(255, 255);
 
   // Serial.print(String((ENCAFR)));
   // Serial.print(", ");
