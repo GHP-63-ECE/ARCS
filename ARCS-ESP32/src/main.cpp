@@ -137,8 +137,9 @@ const unsigned long movementLoopDelayMs = 10;
 const float cameraFOVWidthMM = 95.0; // Width of the camera's field of view in millimeters 
 const float cameraFOVHeightMM = 70.0; // Height of the camera's field of view in millimeters 
 
-int pwrGantry = 100;
+long fixedExtrudeTicks = 1000;
 int pwrExt = 100;
+int pwrGantry = 100;
 
 // MARK: Structs
 
@@ -670,7 +671,6 @@ long readEncoderGantry() {
 bool setGantryPosition(int targetPosMM, int maxSpeed) {
   int targetPos = (targetPosMM - minGantryX_MM) * gantryTicksPerMM;
   targetPos = constrain(targetPos, minGantryPosition, maxGantryPosition);
-  long startLeft = readEncoderGantry();
 
   pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
 
@@ -770,28 +770,27 @@ void setExtruderPower(int power) {
   analogWrite(PWM_EXT, power);
 }
 
-bool setExtruderPosition(int targetPosMM, int maxSpeed){
-  int targetPos = targetPosMM * gantryTicksPerMM;
-  targetPos = constrain(targetPos, minGantryPosition, maxGantryPosition);
-  long startLeft = readEncoderExtruder();
+bool setExtruderPositionTicks(int relativeTarget, int maxSpeed){
+  long start = readEncoderExtruder();
+  long absoluteTarget = start + relativeTarget;
 
   pidControllerExt.Init(kP_ext, kI_ext, kD_ext);
 
   while (true) {
     long current = readEncoderExtruder();
-    long error = targetPos - current;
+    long error = absoluteTarget - current;
 
     bool atTarget = abs(error) <= encoderToleranceTicks;
 
     Serial.print("Extruder Error: ");
     Serial.print(error);
     Serial.print(", Target: ");
-    Serial.print(targetPos);   
+    Serial.print(absoluteTarget);   
     Serial.print(", Current: ");
     Serial.print(current);
 
     if (atTarget) {
-      stopGantry();
+      stopExtruder();
       return true;
     }
     
@@ -799,8 +798,6 @@ bool setExtruderPosition(int targetPosMM, int maxSpeed){
     double output = pidControllerExt.TotalError();
     Serial.print(" Extruder PID Output: ");
     Serial.print(output);
-
-
 
     int speed = atTarget ? 0 : pidOutputToSpeed(output, error, maxSpeed);
     setExtruderPower(speed);
@@ -1000,13 +997,6 @@ void setup() {
   servo.attach(servoPin);
   servo.writeMicroseconds(1100); // send "stop" signal to ESC. Also necessary to arm the ESC.
   Serial.println("ESC TEST PREP");
-  
-  // // Do we even need these inits?
-  // pidController.Init(kP, kI, kD);
-  // pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
-  // leftDrivePID.Init(kP, kI, kD);
-  // rightDrivePID.Init(kP, kI, kD);
-  // pidControllerExt.Init(kP_ext, kI_ext, kD_ext);
 
   // Turn off motors initially
   stopAllDriveMotors();
@@ -1048,7 +1038,7 @@ bool joystickConnected = true;
 void loop() {
   // Serial.println(readEncoderExtruder());
   // setExtruderPower(100);
-  setExtruderPosition(100, 255);
+  setExtruderPositionTicks(100, 255);
   while(true){}
   // while(true){}
   // setGantryPower(100);
@@ -1179,32 +1169,35 @@ void loop() {
   // digitalWrite(Gantry2, LOW);
   // analogWrite(ENI, 100);
 
-//   if (BS.available() > 0) {
-//     String rawData = Serial.readStringUntil('\n');
-//     rawData.trim();
-//     if (rawData.length() > 0) {
-//       int cxIndex = rawData.indexOf("cx");
-//       int cyIndex = rawData.indexOf("cy");
-//       int xIndex = rawData.indexOf("x1");
-//       String xData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
-//       String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
-//       cx = xData.toFloat();
-//       cy = yData.toFloat();
-//     Serial.println(rawData);
-//     }
-//   }
-// //   
-// if(button4State == LOW && prevButton4State == HIGH){
-// autonomous = true;
-// followPath(ax, ay);
-// autonomous = false;
-// button4State = prevButton4State;
-// }
+  // if (BS.available() > 0) {
+  //   String rawData = Serial.readStringUntil('\n');
+  //   rawData.trim();
+  //   if (rawData.length() > 0) {
+  //     int cxIndex = rawData.indexOf("cx");
+  //     int cyIndex = rawData.indexOf("cy");
+  //     int xIndex = rawData.indexOf("x1");
+  //     String xData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
+  //     String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
+  //     cx = xData.toFloat();
+  //     cy = yData.toFloat();
+  //   Serial.println(rawData);
+  //   }
+  // }
 
-// if(button5State == LOW && prevButton5State == HIGH){
-// gantryAlign(cx);
-// button5State = prevButton5State;
-// }
+  if(button4State == LOW && prevButton4State == HIGH){
+    autonomous = true;
+    followPath(ax, ay);
+    autonomous = false;
+    // button4State = prevButton4State;
+  }
+  prevButton4State = button4State;
+
+  if(button5State == LOW && prevButton5State == HIGH){
+    gantryAlign(cx);
+    button5State = prevButton5State;
+  }
+  prevButton5State = button4State;
+
   // Serial.print(String((ENCAFR)));
   // Serial.print(", ");
   // Serial.print(String(digitalRead(ENCBFR)));
@@ -1445,14 +1438,14 @@ std::array<point, 5> getCurrentOrderedCoordinateArray() {
 
   Serial.print("[TRACK VISION RAW] ");
   Serial.println(rawData);
-  // for (int i = 0; i < (int)points.size(); i++) {
-  //   Serial.print("[TRACK VISION POINT] index=");
-  //   Serial.print(i);
-  //   Serial.print(" x=");
-  //   Serial.print(points[i].x);
-  //   Serial.print(" y=");
-  //   Serial.println(points[i].y);
-  // }
+  for (int i = 0; i < (int)points.size(); i++) {
+    Serial.print("[TRACK VISION POINT] index=");
+    Serial.print(i);
+    Serial.print(" x=");
+    Serial.print(points[i].x);
+    Serial.print(" y=");
+    Serial.println(points[i].y);
+  }
   return points;
 }
 
@@ -1548,6 +1541,7 @@ bool driveForwardsAndTrackCrack() {
       Serial.print(" gantryTargetX=");
       Serial.println(coordinates[targetIndex].x);
       driveForwardsAndUpdateCoordinates(shortestDistanceToGantry, &coordinates, coordinates[targetIndex].x);
+      setExtruderPositionTicks(fixedExtrudeTicks, pwrExt);
     }
 
     for (int j = (int)coordinates.size() - 1; j >= 0; j--) {
@@ -1575,7 +1569,6 @@ bool driveForwardsAndTrackCrack() {
 // the gantryTarget variable will be given as a robot relative x value in MM
 // use the runToEncoderTargetsWithGantry() function
 void driveForwardsAndUpdateCoordinates(float distance, std::vector<point>* coordinates, float gantryTarget) {
-  // float maxGantryX_MM = -minGantryX_MM;
   long gantryTargetTicks = 0;
   bool movingGantry = false;
   if (gantryTarget >= minGantryX_MM && gantryTarget <= maxGantryX_MM) {
