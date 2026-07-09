@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <ESP32Servo.h> // ONLY LIBRARY NECESARY FOR ESC 
-#include <BluetoothSerial.h>
+// #include <BluetoothSerial.h>
 #include <PID.h>
 #include <esp_now.h>
 #include <WiFi.h>
@@ -45,8 +45,8 @@ const int L2 = 5;
 
 // Gantry Motor Pins
 const int ENI = 25;
-const int Gantry1 = 27;
-const int Gantry2 = 26; 
+const int Gantry1 = 26;
+const int Gantry2 = 27; 
 
 // Extruder Motor Pins
 const int PWM_EXT = 14;
@@ -75,7 +75,7 @@ PID leftDrivePID = PID();
 PID rightDrivePID = PID();
 PID pidControllerGantry = PID();
 PID pidControllerExt = PID();
-BluetoothSerial BS;
+// BluetoothSerial BS;
 
 // MARK: Variables
 
@@ -86,11 +86,11 @@ double kP = 0.45;
 double kI = 0.0035; 
 double kD = 0.0; // we dont need a big d
 
-double kP_gantry = 0.1;
+double kP_gantry = 0.5;
 double kI_gantry = 0;
 double kD_gantry = 0;
 
-double kP_ext = 0.1;
+double kP_ext = 1;
 double kI_ext = 0;
 double kD_ext = 0;
 
@@ -113,7 +113,7 @@ int targetPositionLeft;
 
 int targetPositionGantry;
 int minGantryPosition = 0;
-int maxGantryPosition = 9996;
+int maxGantryPosition = 38811;
 float gantryTicksPerMM = 9996 / 185.7;
 bool hasZeroedGantry = false;
 
@@ -218,16 +218,16 @@ float degreesPerSecond(float speed) {
 // MARK: Encoder Functions
 
 long readEncoderLeft() {
-  noInterrupts();
+  // noInterrupts();
   long value = encoderValueLeft;
-  interrupts();
+  // interrupts();
   return value;
 }
 
 long readEncoderRight() {
-  noInterrupts();
+  // noInterrupts();
   long value = encoderValueRight;
-  interrupts();
+  // interrupts();
   return value;
 }
 
@@ -383,13 +383,13 @@ float cameraXOrigin = 0.5; // Normalized X coordinate of the camera's origin
 float cameraYOrigin = 0.5; // -2; // Normalized Y coordinate of the camera's origin
 float cameraToRobotCenterMM = 87; // TODO
 float gantryY_MM = -94; // TODO
-float minGantryX_MM = -(185.7 / 2);
-float maxGantryX_MM = maxGantryPosition / gantryTicksPerMM + minGantryX_MM;
+float minGantryX_MM = -70;
+float maxGantryX_MM = 105;
 
 float getGantryX() {
-  noInterrupts();
+  // noInterrupts();
   long gantryTicks = encoderValueGantry;
-  interrupts();
+  // interrupts();
   return gantryTicks/gantryTicksPerMM + minGantryX_MM;
 }
 
@@ -658,13 +658,14 @@ void setGantryPower(int power) {
   if (power > 255) {
     power = 255;
   }
+  // Serial.println(power);
   analogWrite(ENI, power);
 }
 
 long readEncoderGantry() {
-  noInterrupts();
+  // noInterrupts();
   long value = encoderValueGantry;
-  interrupts();
+  // interrupts();
   return value;
 }
 
@@ -726,10 +727,10 @@ bool homeGantryPosition() {
     if (currentPosition == previousGantryPos){
       Serial.println("Gantry homed at position: " + String(currentPosition));
       stopGantry();
-      noInterrupts();
+      // noInterrupts();
       encoderValueGantry = 0;
-      interrupts();
-      hasZeroedGantry = true;
+      // interrupts();
+      // hasZeroedGantry = true;
       return true;
     }
     previousGantryPos = currentPosition;
@@ -753,8 +754,8 @@ void extDirectionBackward() {
 }
 
 void stopExtruder() {
-  digitalWrite(EXT1, LOW);
-  digitalWrite(EXT2, LOW);
+  digitalWrite(EXT1, HIGH);
+  digitalWrite(EXT2, HIGH);
   analogWrite(PWM_EXT, 0);
 }
 
@@ -788,6 +789,9 @@ bool setExtruderPositionTicks(int relativeTarget, int maxSpeed){
     Serial.print(absoluteTarget);   
     Serial.print(", Current: ");
     Serial.print(current);
+    Serial.print("P: " + String(pidControllerExt.p_error));
+    Serial.print("I: " + String(pidControllerExt.i_error));
+    Serial.print("D: " + String(pidControllerExt.d_error));
 
     if (atTarget) {
       stopExtruder();
@@ -825,9 +829,9 @@ void updateEncoderRight(){
 
 void updateEncoderGantry(){
   if (digitalRead(ENCGANA) > digitalRead(ENCGANB))
-    encoderValueGantry--;
-  else
     encoderValueGantry++;
+  else
+    encoderValueGantry--;
 }
 
 void updateEncoderExtruder(){
@@ -868,98 +872,98 @@ bool followPath(float ax[], float ay[]){
   return true;
 }
 
-bool crackAuto() {
-  float dCX = cx;
-  float dCY = cy;
-  driveToCrackCenter(dCX, dCY);
-  gantryAlign(dCX);
-  return true;
-}
+// bool crackAuto() {
+//   float dCX = cx;
+//   float dCY = cy;
+//   driveToCrackCenter(dCX, dCY);
+//   gantryAlign(dCX);
+//   return true;
+// }
 
-bool testAutoDrive() {
-    int dCX = cx;
-      int dCY = cy;
-      while(true){
-        driveToCrackCenter(dCX, dCY);
-      }
-      Serial.println("Aligned");
-    return true;
-}
+// bool testAutoDrive() {
+//     int dCX = cx;
+//       int dCY = cy;
+//       while(true){
+//         driveToCrackCenter(dCX, dCY);
+//       }
+//       Serial.println("Aligned");
+//     return true;
+// }
 
-void updateVision(){
-  if (BS.available() > 0) {
-    Serial.println("Connected");
-    String rawData = BS.readStringUntil('\n');
-    rawData.trim();
-    Serial.println(rawData);
-    if (rawData.length() > 0) {
-      int cxIndex = rawData.indexOf("cx");
-      int cyIndex = rawData.indexOf("cy");
-      int xIndex = rawData.indexOf("x1");
-      String xData = rawData.substring(cxIndex + 4, xIndex - cxIndex - 3);
-      String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
-      cx = xData.toFloat();
-      cy = yData.toFloat();
-      Serial.println("x" + xData);
-      Serial.println("y" + yData);
-      if(cx == -1 && cy == -1){
-        cx = 0.5;
-        cy = 0.5;
-      }
-    // Serial.println(rawData);
-    }
-  }
-}
+// void updateVision(){
+//   if (BS.available() > 0) {
+//     Serial.println("Connected");
+//     String rawData = BS.readStringUntil('\n');
+//     rawData.trim();
+//     Serial.println(rawData);
+//     if (rawData.length() > 0) {
+//       int cxIndex = rawData.indexOf("cx");
+//       int cyIndex = rawData.indexOf("cy");
+//       int xIndex = rawData.indexOf("x1");
+//       String xData = rawData.substring(cxIndex + 4, xIndex - cxIndex - 3);
+//       String yData = rawData.substring(cyIndex + 4, xIndex - cyIndex - 3);
+//       cx = xData.toFloat();
+//       cy = yData.toFloat();
+//       Serial.println("x" + xData);
+//       Serial.println("y" + yData);
+//       if(cx == -1 && cy == -1){
+//         cx = 0.5;
+//         cy = 0.5;
+//       }
+//     // Serial.println(rawData);
+//     }
+//   }
+// }
 
-void updateVisionArray(){
-  if (BS.available() > 0){
-    String rawData = BS.readStringUntil('\n');
-    rawData.trim();
-    if(rawData.length() > 0){
-      int x1Index = rawData.indexOf("x1");
-      int x2Index = rawData.indexOf("x2");
-      int x3Index = rawData.indexOf("x3");
-      int x4Index = rawData.indexOf("x4");
-      int cxIndex = rawData.indexOf("cx");
+// void updateVisionArray(){
+//   if (BS.available() > 0){
+//     String rawData = BS.readStringUntil('\n');
+//     rawData.trim();
+//     if(rawData.length() > 0){
+//       int x1Index = rawData.indexOf("x1");
+//       int x2Index = rawData.indexOf("x2");
+//       int x3Index = rawData.indexOf("x3");
+//       int x4Index = rawData.indexOf("x4");
+//       int cxIndex = rawData.indexOf("cx");
 
-      int y1Index = rawData.indexOf("y1");
-      int y2Index = rawData.indexOf("y2");
-      int y3Index = rawData.indexOf("y3");
-      int y4Index = rawData.indexOf("y4");
-      int cyIndex = rawData.indexOf("cy");
+//       int y1Index = rawData.indexOf("y1");
+//       int y2Index = rawData.indexOf("y2");
+//       int y3Index = rawData.indexOf("y3");
+//       int y4Index = rawData.indexOf("y4");
+//       int cyIndex = rawData.indexOf("cy");
       
-      String x1Data = rawData.substring(x1Index + 4, x2Index - x1Index - 3);
-      String x2Data = rawData.substring(x2Index + 4, x3Index - x2Index - 3);
-      String x3Data = rawData.substring(x3Index + 4, x4Index - x3Index - 3);
-      String x4Data = rawData.substring(x4Index + 4, cxIndex - x4Index - 3);
-      String cxData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
+//       String x1Data = rawData.substring(x1Index + 4, x2Index - x1Index - 3);
+//       String x2Data = rawData.substring(x2Index + 4, x3Index - x2Index - 3);
+//       String x3Data = rawData.substring(x3Index + 4, x4Index - x3Index - 3);
+//       String x4Data = rawData.substring(x4Index + 4, cxIndex - x4Index - 3);
+//       String cxData = rawData.substring(cxIndex + 4, cyIndex - cxIndex - 3);
 
-      String y1Data = rawData.substring(cyIndex + 4, cxIndex - cyIndex - 3);
-      String y2Data = rawData.substring(y1Index + 4, y2Index - y1Index - 3);
-      String y3Data = rawData.substring(y2Index + 4, y3Index - y2Index - 3);
-      String y4Data = rawData.substring(y3Index + 4, y4Index - y3Index - 3);
-      String cyData = rawData.substring(y4Index + 4, y3Index - y4Index - 3);
+//       String y1Data = rawData.substring(cyIndex + 4, cxIndex - cyIndex - 3);
+//       String y2Data = rawData.substring(y1Index + 4, y2Index - y1Index - 3);
+//       String y3Data = rawData.substring(y2Index + 4, y3Index - y2Index - 3);
+//       String y4Data = rawData.substring(y3Index + 4, y4Index - y3Index - 3);
+//       String cyData = rawData.substring(y4Index + 4, y3Index - y4Index - 3);
       
-      ax[0] = cxData.toFloat();
-      ax[1] = x1Data.toFloat();
-      ax[2] = x2Data.toFloat();
-      ax[3] = x3Data.toFloat();
-      ax[4] = x4Data.toFloat();
+//       ax[0] = cxData.toFloat();
+//       ax[1] = x1Data.toFloat();
+//       ax[2] = x2Data.toFloat();
+//       ax[3] = x3Data.toFloat();
+//       ax[4] = x4Data.toFloat();
 
-      ay[0] = y1Data.toFloat();
-      ay[1] = y2Data.toFloat();
-      ay[2] = y3Data.toFloat();
-      ay[3]= y4Data.toFloat();
-      ay[4] = y4Data.toFloat();
-    }
-  }
-}
+//       ay[0] = y1Data.toFloat();
+//       ay[1] = y2Data.toFloat();
+//       ay[2] = y3Data.toFloat();
+//       ay[3]= y4Data.toFloat();
+//       ay[4] = y4Data.toFloat();
+//     }
+//   }
+// }
 
 // MARK: Setup
 void setup() {
 
   Serial.begin(115200);
-  BS.begin("ARCS");
+  // BS.begin("ARCS");
 
   // Set all control pins to outputs
   pinMode(PWML, OUTPUT);
@@ -1031,15 +1035,20 @@ const int edfJoystickDefault = 1950;
 int edfPower = edfPowerMin;
 int edfIncrementResolution = 10;
 int edfIncrement = 0;
-int joystickDeadzone = 50;
+int joystickDeadzone = 100;
 bool killEverything = false;
 bool joystickConnected = true;
 
 void loop() {
+  // setGantryPosition(0, 255);
+  // setGantryPosition(-50, 255);
   // Serial.println(readEncoderExtruder());
   // setExtruderPower(100);
-  setExtruderPositionTicks(100, 255);
-  while(true){}
+  // setExtruderPositionTicks(1000, 255);
+  // Serial.println("HIHIHIHIHIHI");
+  // delay(2000);
+  // homeGantryPosition();
+  // while(true){}
   // while(true){}
   // setGantryPower(100);
   // updateVision();
@@ -1077,6 +1086,8 @@ void loop() {
   // testAutoDrive();
 
   // MARK: Joystick Code
+
+  
   
   
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
@@ -1103,13 +1114,15 @@ void loop() {
   bool button5State=joystickData.button5;
 
   edfIncrement = 0;
-  if (joystickData.vy3 < edfJoystickDefault) {
+  if (joystickData.vy2 < edfJoystickDefault) {
     edfIncrement=map(joystickData.vy2, 0, edfJoystickDefault-200, -edfIncrementResolution, 0);
   } else {
     edfIncrement=map(joystickData.vy2, edfJoystickDefault+100, 4095, 0, edfIncrementResolution);
   }
 
   gantryVal = -gantryVal;
+  leftVal = -leftVal;
+  rightVal = -rightVal;
 
   edfIncrement = -edfIncrement;
   edfIncrement /= edfIncrementResolution; // Normalize to -1 to 1
@@ -1132,15 +1145,18 @@ void loop() {
       edfPower += edfIncrement;
       edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
       servo.writeMicroseconds(edfPower); // output to edfs
-    } 
+    } else {
+      setExtruderPower(extVal);
+    }
 
     // Serial.print("Setting Speed");
     setSpeed(leftVal, rightVal);
     setGantryPower(gantryVal);
-    setExtruderPower(extVal);
+
   }
     
-  
+  // Serial.println(String(encoderValueGantry));
+  // Serial.println(encoderValueLeft);
   Serial.print(" EDF Increment: ");
   Serial.print(edfIncrement);
   Serial.print(" EDF Power: ");
@@ -1151,6 +1167,8 @@ void loop() {
   Serial.print(rightVal);
   Serial.print(" Gantry Val: ");
   Serial.print(gantryVal);
+  Serial.print(" Extruder Val: ");
+  Serial.print(extVal);
   Serial.print(" Kill Everything: ");
   Serial.print(killEverything);
   Serial.println();
@@ -1184,19 +1202,19 @@ void loop() {
   //   }
   // }
 
-  if(button4State == LOW && prevButton4State == HIGH){
-    autonomous = true;
-    followPath(ax, ay);
-    autonomous = false;
-    // button4State = prevButton4State;
-  }
-  prevButton4State = button4State;
+  // if(button4State == LOW && prevButton4State == HIGH){
+  //   autonomous = true;
+  //   followPath(ax, ay);
+  //   autonomous = false;
+  //   // button4State = prevButton4State;
+  // }
+  // prevButton4State = button4State;
 
-  if(button5State == LOW && prevButton5State == HIGH){
-    gantryAlign(cx);
-    button5State = prevButton5State;
-  }
-  prevButton5State = button4State;
+  // if(button5State == LOW && prevButton5State == HIGH){
+  //   gantryAlign(cx);
+  //   button5State = prevButton5State;
+  // }
+  // prevButton5State = button4State;
 
   // Serial.print(String((ENCAFR)));
   // Serial.print(", ");
@@ -1209,397 +1227,397 @@ void loop() {
 
 // MARK: New Tracking Code
 
-const float invalidTrackingCoordinateMM = -1000000.0;
+// const float invalidTrackingCoordinateMM = -1000000.0;
 
-bool runToEncoderTargetsWithGantry(long leftTargetTicks, long rightTargetTicks, long gantryTargetTicks, int speed) {
-  int maxSpeed = constrain(abs(speed), 0, 255);
-  if (maxSpeed == 0 || (leftTargetTicks == 0 && rightTargetTicks == 0 && gantryTargetTicks == 0)) {
-    stopAllDriveMotors();
-    stopGantry();
-    return true;
-  }
+// bool runToEncoderTargetsWithGantry(long leftTargetTicks, long rightTargetTicks, long gantryTargetTicks, int speed) {
+//   int maxSpeed = constrain(abs(speed), 0, 255);
+//   if (maxSpeed == 0 || (leftTargetTicks == 0 && rightTargetTicks == 0 && gantryTargetTicks == 0)) {
+//     stopAllDriveMotors();
+//     stopGantry();
+//     return true;
+//   }
 
-  long startLeft = readEncoderLeft();
-  long startRight = readEncoderRight();
-  long startGantry = readEncoderGantry();
-  targetPositionLeft = startLeft + leftTargetTicks;
-  targetPositionRight = startRight + rightTargetTicks;
-  targetPositionGantry = startGantry + gantryTargetTicks;
+//   long startLeft = readEncoderLeft();
+//   long startRight = readEncoderRight();
+//   long startGantry = readEncoderGantry();
+//   targetPositionLeft = startLeft + leftTargetTicks;
+//   targetPositionRight = startRight + rightTargetTicks;
+//   targetPositionGantry = startGantry + gantryTargetTicks;
 
-  Serial.print("[TRACK MOVE] leftTicks=");
-  Serial.print(leftTargetTicks);
-  Serial.print(" rightTicks=");
-  Serial.print(rightTargetTicks);
-  Serial.print(" gantryTicks=");
-  Serial.print(gantryTargetTicks);
-  Serial.print(" maxSpeed=");
-  Serial.println(maxSpeed);
+//   Serial.print("[TRACK MOVE] leftTicks=");
+//   Serial.print(leftTargetTicks);
+//   Serial.print(" rightTicks=");
+//   Serial.print(rightTargetTicks);
+//   Serial.print(" gantryTicks=");
+//   Serial.print(gantryTargetTicks);
+//   Serial.print(" maxSpeed=");
+//   Serial.println(maxSpeed);
 
-  leftDrivePID.Init(kP, kI, kD);
-  rightDrivePID.Init(kP, kI, kD);
-  pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
+//   leftDrivePID.Init(kP, kI, kD);
+//   rightDrivePID.Init(kP, kI, kD);
+//   pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
 
-  float longestDriveDistanceMm = (max(abs(leftTargetTicks), abs(rightTargetTicks)) / (float)ticksPerRotation) * wheelCircumference;
-  float gantryDistanceMm = abs(gantryTargetTicks) / gantryTicksPerMM;
-  float longestDistanceMm = max(longestDriveDistanceMm, gantryDistanceMm);
-  unsigned long timeoutMs = (unsigned long)((longestDistanceMm / mmPerSecond(maxSpeed)) * 3000.0) + 1000;
-  unsigned long startTime = millis();
+//   float longestDriveDistanceMm = (max(abs(leftTargetTicks), abs(rightTargetTicks)) / (float)ticksPerRotation) * wheelCircumference;
+//   float gantryDistanceMm = abs(gantryTargetTicks) / gantryTicksPerMM;
+//   float longestDistanceMm = max(longestDriveDistanceMm, gantryDistanceMm);
+//   unsigned long timeoutMs = (unsigned long)((longestDistanceMm / mmPerSecond(maxSpeed)) * 3000.0) + 1000;
+//   unsigned long startTime = millis();
 
-  while (true) {
-    long currentLeft = readEncoderLeft();
-    long currentRight = readEncoderRight();
-    long currentGantry = readEncoderGantry();
-    long leftError = targetPositionLeft - currentLeft;
-    long rightError = targetPositionRight - currentRight;
-    long gantryError = targetPositionGantry - currentGantry;
+//   while (true) {
+//     long currentLeft = readEncoderLeft();
+//     long currentRight = readEncoderRight();
+//     long currentGantry = readEncoderGantry();
+//     long leftError = targetPositionLeft - currentLeft;
+//     long rightError = targetPositionRight - currentRight;
+//     long gantryError = targetPositionGantry - currentGantry;
 
-    bool leftAtTarget = abs(leftError) <= encoderToleranceTicks;
-    bool rightAtTarget = abs(rightError) <= encoderToleranceTicks;
-    bool gantryAtTarget = abs(gantryError) <= encoderToleranceTicks;
+//     bool leftAtTarget = abs(leftError) <= encoderToleranceTicks;
+//     bool rightAtTarget = abs(rightError) <= encoderToleranceTicks;
+//     bool gantryAtTarget = abs(gantryError) <= encoderToleranceTicks;
 
-    // Serial.print("Left Error: ");
-    // Serial.print(leftError);
-    // Serial.print(", Right Error: ");
-    // Serial.print(rightError);
-    // Serial.print(", Left Target: ");
-    // Serial.print(targetPositionLeft);   
-    // Serial.print(", Right Target: ");
-    // Serial.print(targetPositionRight);
-    // Serial.print(", Left Current: ");
-    // Serial.print(currentLeft);
-    // Serial.print(", Right Current: ");
-    // Serial.print(currentRight);
+//     // Serial.print("Left Error: ");
+//     // Serial.print(leftError);
+//     // Serial.print(", Right Error: ");
+//     // Serial.print(rightError);
+//     // Serial.print(", Left Target: ");
+//     // Serial.print(targetPositionLeft);   
+//     // Serial.print(", Right Target: ");
+//     // Serial.print(targetPositionRight);
+//     // Serial.print(", Left Current: ");
+//     // Serial.print(currentLeft);
+//     // Serial.print(", Right Current: ");
+//     // Serial.print(currentRight);
 
-    if (leftAtTarget && rightAtTarget && gantryAtTarget) {
-      stopAllDriveMotors();
-      stopGantry();
-      Serial.print("[TRACK MOVE DONE] left=");
-      Serial.print(currentLeft);
-      Serial.print(" right=");
-      Serial.print(currentRight);
-      Serial.print(" gantry=");
-      Serial.println(currentGantry);
-      return true;
-    }
+//     if (leftAtTarget && rightAtTarget && gantryAtTarget) {
+//       stopAllDriveMotors();
+//       stopGantry();
+//       Serial.print("[TRACK MOVE DONE] left=");
+//       Serial.print(currentLeft);
+//       Serial.print(" right=");
+//       Serial.print(currentRight);
+//       Serial.print(" gantry=");
+//       Serial.println(currentGantry);
+//       return true;
+//     }
 
-    if (millis() - startTime > timeoutMs) {
-      stopAllDriveMotors();
-      stopGantry();
-      Serial.print("[TRACK MOVE TIMEOUT] leftError=");
-      Serial.print(leftError);
-      Serial.print(" rightError=");
-      Serial.print(rightError);
-      Serial.print(" gantryError=");
-      Serial.println(gantryError);
-      return false;
-    }
+//     if (millis() - startTime > timeoutMs) {
+//       stopAllDriveMotors();
+//       stopGantry();
+//       Serial.print("[TRACK MOVE TIMEOUT] leftError=");
+//       Serial.print(leftError);
+//       Serial.print(" rightError=");
+//       Serial.print(rightError);
+//       Serial.print(" gantryError=");
+//       Serial.println(gantryError);
+//       return false;
+//     }
 
-    leftDrivePID.UpdateError(leftError);
-    rightDrivePID.UpdateError(rightError);
-    pidControllerGantry.UpdateError(gantryError);
-    // Serial.print(", Left P: ");
-    // Serial.print(leftDrivePID.p_error);
-    // Serial.print(", Left I: ");
-    // Serial.print(leftDrivePID.i_error);
-    // Serial.print(", Left D: ");
-    // Serial.print(leftDrivePID.d_error);
-    // Serial.print(", Right P: ");
-    // Serial.print(rightDrivePID.p_error);
-    // Serial.print(", Right I: ");
-    // Serial.print(rightDrivePID.i_error);
-    // Serial.print(", Right D: ");
-    // Serial.println(rightDrivePID.d_error);
-    double leftOutput = leftDrivePID.TotalError();
-    double rightOutput = rightDrivePID.TotalError();
-    double gantryOutput = pidControllerGantry.TotalError();
+//     leftDrivePID.UpdateError(leftError);
+//     rightDrivePID.UpdateError(rightError);
+//     pidControllerGantry.UpdateError(gantryError);
+//     // Serial.print(", Left P: ");
+//     // Serial.print(leftDrivePID.p_error);
+//     // Serial.print(", Left I: ");
+//     // Serial.print(leftDrivePID.i_error);
+//     // Serial.print(", Left D: ");
+//     // Serial.print(leftDrivePID.d_error);
+//     // Serial.print(", Right P: ");
+//     // Serial.print(rightDrivePID.p_error);
+//     // Serial.print(", Right I: ");
+//     // Serial.print(rightDrivePID.i_error);
+//     // Serial.print(", Right D: ");
+//     // Serial.println(rightDrivePID.d_error);
+//     double leftOutput = leftDrivePID.TotalError();
+//     double rightOutput = rightDrivePID.TotalError();
+//     double gantryOutput = pidControllerGantry.TotalError();
 
-    // Serial.print(", Left Output: ");
-    // Serial.print(leftOutput);
-    // Serial.print(", Right Output: ");
-    // Serial.println(rightOutput);
+//     // Serial.print(", Left Output: ");
+//     // Serial.print(leftOutput);
+//     // Serial.print(", Right Output: ");
+//     // Serial.println(rightOutput);
 
-    int leftSpeed = leftAtTarget ? 0 : pidOutputToSpeed(leftOutput, leftError, maxSpeed);
-    int rightSpeed = rightAtTarget ? 0 : pidOutputToSpeed(rightOutput, rightError, maxSpeed);
-    int gantrySpeed = gantryAtTarget ? 0 : pidOutputToSpeed(gantryOutput, gantryError, maxSpeed);
+//     int leftSpeed = leftAtTarget ? 0 : pidOutputToSpeed(leftOutput, leftError, maxSpeed);
+//     int rightSpeed = rightAtTarget ? 0 : pidOutputToSpeed(rightOutput, rightError, maxSpeed);
+//     int gantrySpeed = gantryAtTarget ? 0 : pidOutputToSpeed(gantryOutput, gantryError, maxSpeed);
 
-    // Serial.print("[TRACK MOVE LOOP] leftError=");
-    // Serial.print(leftError);
-    // Serial.print(" rightError=");
-    // Serial.print(rightError);
-    // Serial.print(" gantryError=");
-    // Serial.print(gantryError);
-    // Serial.print(" leftSpeed=");
-    // Serial.print(leftSpeed);
-    // Serial.print(" rightSpeed=");
-    // Serial.print(rightSpeed);
-    // Serial.print(" gantrySpeed=");
-    // Serial.println(gantrySpeed);
+//     // Serial.print("[TRACK MOVE LOOP] leftError=");
+//     // Serial.print(leftError);
+//     // Serial.print(" rightError=");
+//     // Serial.print(rightError);
+//     // Serial.print(" gantryError=");
+//     // Serial.print(gantryError);
+//     // Serial.print(" leftSpeed=");
+//     // Serial.print(leftSpeed);
+//     // Serial.print(" rightSpeed=");
+//     // Serial.print(rightSpeed);
+//     // Serial.print(" gantrySpeed=");
+//     // Serial.println(gantrySpeed);
 
-    if (leftTargetTicks == -rightTargetTicks) {
-      // If turning, ensure both motors are moving at the same speed
-      setSpeed(leftSpeed, -leftSpeed);
-      // Serial.print("Output Speed:");
-      // Serial.println(leftSpeed);
-    } else {
-      setSpeed(leftSpeed, rightSpeed);
-    }
-    setGantryPower(gantrySpeed);
-    delay(movementLoopDelayMs);
-  }
-}
+//     if (leftTargetTicks == -rightTargetTicks) {
+//       // If turning, ensure both motors are moving at the same speed
+//       setSpeed(leftSpeed, -leftSpeed);
+//       // Serial.print("Output Speed:");
+//       // Serial.println(leftSpeed);
+//     } else {
+//       setSpeed(leftSpeed, rightSpeed);
+//     }
+//     setGantryPower(gantrySpeed);
+//     delay(movementLoopDelayMs);
+//   }
+// }
 
-float parseVisionCoordinate(String rawData, String key) {
-  int keyIndex = rawData.indexOf(key);
-  if (keyIndex < 0) {
-    return -1.0;
-  }
+// float parseVisionCoordinate(String rawData, String key) {
+//   int keyIndex = rawData.indexOf(key);
+//   if (keyIndex < 0) {
+//     return -1.0;
+//   }
 
-  int valueStart = keyIndex + key.length();
-  while (valueStart < rawData.length()) {
-    char currentChar = rawData.charAt(valueStart);
-    if (currentChar == '-' || currentChar == '.' || (currentChar >= '0' && currentChar <= '9')) {
-      break;
-    }
-    valueStart++;
-  }
+//   int valueStart = keyIndex + key.length();
+//   while (valueStart < rawData.length()) {
+//     char currentChar = rawData.charAt(valueStart);
+//     if (currentChar == '-' || currentChar == '.' || (currentChar >= '0' && currentChar <= '9')) {
+//       break;
+//     }
+//     valueStart++;
+//   }
 
-  int valueEnd = valueStart;
-  if (valueEnd < rawData.length() && rawData.charAt(valueEnd) == '-') {
-    valueEnd++;
-  }
-  while (valueEnd < rawData.length()) {
-    char currentChar = rawData.charAt(valueEnd);
-    if (currentChar != '.' && (currentChar < '0' || currentChar > '9')) {
-      break;
-    }
-    valueEnd++;
-  }
+//   int valueEnd = valueStart;
+//   if (valueEnd < rawData.length() && rawData.charAt(valueEnd) == '-') {
+//     valueEnd++;
+//   }
+//   while (valueEnd < rawData.length()) {
+//     char currentChar = rawData.charAt(valueEnd);
+//     if (currentChar != '.' && (currentChar < '0' || currentChar > '9')) {
+//       break;
+//     }
+//     valueEnd++;
+//   }
 
-  if (valueStart >= rawData.length() || valueEnd <= valueStart) {
-    return -1.0;
-  }
-  return rawData.substring(valueStart, valueEnd).toFloat();
-}
+//   if (valueStart >= rawData.length() || valueEnd <= valueStart) {
+//     return -1.0;
+//   }
+//   return rawData.substring(valueStart, valueEnd).toFloat();
+// }
 
-point normalizedToRobotRelativePoint(float x, float y) {
-  if (x < 0.0 || y < 0.0) {
-    return {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM};
-  }
+// point normalizedToRobotRelativePoint(float x, float y) {
+//   if (x < 0.0 || y < 0.0) {
+//     return {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM};
+//   }
 
-  return {
-    normalizedToRobotRelativeX(x),
-    normalizedToRobotRelativeY(y) + cameraToRobotCenterMM
-  };
-}
+//   return {
+//     normalizedToRobotRelativeX(x),
+//     normalizedToRobotRelativeY(y) + cameraToRobotCenterMM
+//   };
+// }
 
-bool isDetectedPoint(point coordinate) {
-  return coordinate.x > invalidTrackingCoordinateMM / 2.0 && coordinate.y > invalidTrackingCoordinateMM / 2.0;
-}
+// bool isDetectedPoint(point coordinate) {
+//   return coordinate.x > invalidTrackingCoordinateMM / 2.0 && coordinate.y > invalidTrackingCoordinateMM / 2.0;
+// }
 
-bool isDuplicateTrackedPoint(std::vector<point>* coordinates, point candidate) {
-  const float duplicateToleranceMM = 5.0;
-  for (int i = 0; i < (int)coordinates->size(); i++) {
-    point existing = coordinates->at(i);
-    if (!isDetectedPoint(existing)) {
-      continue;
-    }
-    float xDifference = existing.x > candidate.x ? existing.x - candidate.x : candidate.x - existing.x;
-    float yDifference = existing.y > candidate.y ? existing.y - candidate.y : candidate.y - existing.y;
-    if (xDifference <= duplicateToleranceMM && yDifference <= duplicateToleranceMM) {
-      return true;
-    }
-  }
-  return false;
-}
+// bool isDuplicateTrackedPoint(std::vector<point>* coordinates, point candidate) {
+//   const float duplicateToleranceMM = 5.0;
+//   for (int i = 0; i < (int)coordinates->size(); i++) {
+//     point existing = coordinates->at(i);
+//     if (!isDetectedPoint(existing)) {
+//       continue;
+//     }
+//     float xDifference = existing.x > candidate.x ? existing.x - candidate.x : candidate.x - existing.x;
+//     float yDifference = existing.y > candidate.y ? existing.y - candidate.y : candidate.y - existing.y;
+//     if (xDifference <= duplicateToleranceMM && yDifference <= duplicateToleranceMM) {
+//       return true;
+//     }
+//   }
+//   return false;
+// }
 
-std::array<point, 5> getCurrentOrderedCoordinateArray() {
-  // It should order it in the order y4, y3, cy, y2, y1
-  // AKA x4, x3, cx, x2, x1
-  // It should take the values directly from the bluetooth, i think the updateVisionArray does this but it shouldn't use that function
-  // the bluetooth gives normalized coordinates relative to the camera FOV with 0,0 being the top left and 1,1 being the bottom right
-  // if the normalized coordinate says -1 then it isn't detecting a crack
-  // you have to convert the coordinates to robot relative and in MM, there is already logic that does this like float normalizedToRobotRelativeX(float x) and functions around that area
-  std::array<point, 5> points = {{{invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}}};
-  if (BS.available() <= 0) {
-    return points;
-  }
+// std::array<point, 5> getCurrentOrderedCoordinateArray() {
+//   // It should order it in the order y4, y3, cy, y2, y1
+//   // AKA x4, x3, cx, x2, x1
+//   // It should take the values directly from the bluetooth, i think the updateVisionArray does this but it shouldn't use that function
+//   // the bluetooth gives normalized coordinates relative to the camera FOV with 0,0 being the top left and 1,1 being the bottom right
+//   // if the normalized coordinate says -1 then it isn't detecting a crack
+//   // you have to convert the coordinates to robot relative and in MM, there is already logic that does this like float normalizedToRobotRelativeX(float x) and functions around that area
+//   std::array<point, 5> points = {{{invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}}};
+//   if (BS.available() <= 0) {
+//     return points;
+//   }
 
-  String rawData = BS.readStringUntil('\n');
-  rawData.trim();
-  if (rawData.length() == 0) {
-    return points;
-  }
+//   String rawData = BS.readStringUntil('\n');
+//   rawData.trim();
+//   if (rawData.length() == 0) {
+//     return points;
+//   }
 
-  points[0] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x4"), parseVisionCoordinate(rawData, "y4"));
-  points[1] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x3"), parseVisionCoordinate(rawData, "y3"));
-  points[2] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "cx"), parseVisionCoordinate(rawData, "cy"));
-  points[3] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x2"), parseVisionCoordinate(rawData, "y2"));
-  points[4] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x1"), parseVisionCoordinate(rawData, "y1"));
+//   points[0] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x4"), parseVisionCoordinate(rawData, "y4"));
+//   points[1] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x3"), parseVisionCoordinate(rawData, "y3"));
+//   points[2] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "cx"), parseVisionCoordinate(rawData, "cy"));
+//   points[3] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x2"), parseVisionCoordinate(rawData, "y2"));
+//   points[4] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x1"), parseVisionCoordinate(rawData, "y1"));
 
-  Serial.print("[TRACK VISION RAW] ");
-  Serial.println(rawData);
-  for (int i = 0; i < (int)points.size(); i++) {
-    Serial.print("[TRACK VISION POINT] index=");
-    Serial.print(i);
-    Serial.print(" x=");
-    Serial.print(points[i].x);
-    Serial.print(" y=");
-    Serial.println(points[i].y);
-  }
-  return points;
-}
+//   Serial.print("[TRACK VISION RAW] ");
+//   Serial.println(rawData);
+//   for (int i = 0; i < (int)points.size(); i++) {
+//     Serial.print("[TRACK VISION POINT] index=");
+//     Serial.print(i);
+//     Serial.print(" x=");
+//     Serial.print(points[i].x);
+//     Serial.print(" y=");
+//     Serial.println(points[i].y);
+//   }
+//   return points;
+// }
 
-// This function will drive the robot forwards once the robot is already aligned with the crack
-// it will stop once the crack is no longer detected AND the robot has fully filled the last detected crack
-bool driveForwardsAndTrackCrack() {
-  std::vector<point> coordinates;
-  const int numberOfLoops = 40;
-  const float filledPointToleranceMM = 8.0;
-  bool hasSeenCrack = false;
+// // This function will drive the robot forwards once the robot is already aligned with the crack
+// // it will stop once the crack is no longer detected AND the robot has fully filled the last detected crack
+// bool driveForwardsAndTrackCrack() {
+//   std::vector<point> coordinates;
+//   const int numberOfLoops = 40;
+//   const float filledPointToleranceMM = 8.0;
+//   bool hasSeenCrack = false;
 
-  Serial.println("[TRACK] start");
+//   Serial.println("[TRACK] start");
 
-  for (int i = 0; i < numberOfLoops; i++) {
-    std::array<point, 5> currentPoints = getCurrentOrderedCoordinateArray();
-    bool detectedCrackThisLoop = false;
-    int newPointsThisLoop = 0;
+//   for (int i = 0; i < numberOfLoops; i++) {
+//     std::array<point, 5> currentPoints = getCurrentOrderedCoordinateArray();
+//     bool detectedCrackThisLoop = false;
+//     int newPointsThisLoop = 0;
 
-    for (int j = 0; j < (int)currentPoints.size(); j++) {
-      point currentPoint = currentPoints[j];
-      if (!isDetectedPoint(currentPoint)) {
-        continue;
-      }
-      detectedCrackThisLoop = true;
-      hasSeenCrack = true;
-      if (!isDuplicateTrackedPoint(&coordinates, currentPoint)) {
-        coordinates.push_back(currentPoint);
-        newPointsThisLoop++;
-      }
-    }
+//     for (int j = 0; j < (int)currentPoints.size(); j++) {
+//       point currentPoint = currentPoints[j];
+//       if (!isDetectedPoint(currentPoint)) {
+//         continue;
+//       }
+//       detectedCrackThisLoop = true;
+//       hasSeenCrack = true;
+//       if (!isDuplicateTrackedPoint(&coordinates, currentPoint)) {
+//         coordinates.push_back(currentPoint);
+//         newPointsThisLoop++;
+//       }
+//     }
 
-    Serial.print("[TRACK] loop=");
-    Serial.print(i);
-    Serial.print(" detected=");
-    Serial.print(detectedCrackThisLoop);
-    Serial.print(" newPoints=");
-    Serial.print(newPointsThisLoop);
-    Serial.print(" queued=");
-    Serial.println((int)coordinates.size());
-    // for (int j = 0; j < (int)coordinates.size(); j++) {
-    //   Serial.print("[TRACK QUEUE] index=");
-    //   Serial.print(j);
-    //   Serial.print(" x=");
-    //   Serial.print(coordinates[j].x);
-    //   Serial.print(" y=");
-    //   Serial.println(coordinates[j].y);
-    // }
+//     Serial.print("[TRACK] loop=");
+//     Serial.print(i);
+//     Serial.print(" detected=");
+//     Serial.print(detectedCrackThisLoop);
+//     Serial.print(" newPoints=");
+//     Serial.print(newPointsThisLoop);
+//     Serial.print(" queued=");
+//     Serial.println((int)coordinates.size());
+//     // for (int j = 0; j < (int)coordinates.size(); j++) {
+//     //   Serial.print("[TRACK QUEUE] index=");
+//     //   Serial.print(j);
+//     //   Serial.print(" x=");
+//     //   Serial.print(coordinates[j].x);
+//     //   Serial.print(" y=");
+//     //   Serial.println(coordinates[j].y);
+//     // }
 
-    int targetIndex = -1;
-    float shortestDistanceToGantry = 1000000.0;
-    for (int j = 0; j < (int)coordinates.size(); j++) {
-      float distanceToGantry = coordinates[j].y - gantryY_MM;
-      if (distanceToGantry >= -filledPointToleranceMM && distanceToGantry < shortestDistanceToGantry) {
-        shortestDistanceToGantry = max(0.0f, distanceToGantry);
-        targetIndex = j;
-      }
-    }
+//     int targetIndex = -1;
+//     float shortestDistanceToGantry = 1000000.0;
+//     for (int j = 0; j < (int)coordinates.size(); j++) {
+//       float distanceToGantry = coordinates[j].y - gantryY_MM;
+//       if (distanceToGantry >= -filledPointToleranceMM && distanceToGantry < shortestDistanceToGantry) {
+//         shortestDistanceToGantry = max(0.0f, distanceToGantry);
+//         targetIndex = j;
+//       }
+//     }
 
-    if (targetIndex < 0) {
-      for (int j = (int)coordinates.size() - 1; j >= 0; j--) {
-        if (coordinates[j].y <= gantryY_MM + filledPointToleranceMM) {
-          coordinates.erase(coordinates.begin() + j);
-        }
-      }
-      if (!detectedCrackThisLoop && coordinates.empty()) {
-        stopAllDriveMotors();
-        stopGantry();
-        Serial.print("[TRACK] done; hasSeenCrack=");
-        Serial.println(hasSeenCrack);
-        return hasSeenCrack;
-      }
-      Serial.println("[TRACK] no usable target yet");
-      delay(20);
-      continue;
-    }
+//     if (targetIndex < 0) {
+//       for (int j = (int)coordinates.size() - 1; j >= 0; j--) {
+//         if (coordinates[j].y <= gantryY_MM + filledPointToleranceMM) {
+//           coordinates.erase(coordinates.begin() + j);
+//         }
+//       }
+//       if (!detectedCrackThisLoop && coordinates.empty()) {
+//         stopAllDriveMotors();
+//         stopGantry();
+//         Serial.print("[TRACK] done; hasSeenCrack=");
+//         Serial.println(hasSeenCrack);
+//         return hasSeenCrack;
+//       }
+//       Serial.println("[TRACK] no usable target yet");
+//       delay(20);
+//       continue;
+//     }
 
-    Serial.print("[TRACK] targetIndex=");
-    Serial.print(targetIndex);
-    Serial.print(" targetX=");
-    Serial.print(coordinates[targetIndex].x);
-    Serial.print(" targetY=");
-    Serial.print(coordinates[targetIndex].y);
-    Serial.print(" distanceToGantry=");
-    Serial.println(shortestDistanceToGantry);
+//     Serial.print("[TRACK] targetIndex=");
+//     Serial.print(targetIndex);
+//     Serial.print(" targetX=");
+//     Serial.print(coordinates[targetIndex].x);
+//     Serial.print(" targetY=");
+//     Serial.print(coordinates[targetIndex].y);
+//     Serial.print(" distanceToGantry=");
+//     Serial.println(shortestDistanceToGantry);
 
-    if (shortestDistanceToGantry > cameraFOVHeightMM) {
-      Serial.print("[TRACK] strideForwardMM=");
-      Serial.println(cameraFOVHeightMM);
-      driveForwardsAndUpdateCoordinates(cameraFOVHeightMM, &coordinates, invalidTrackingCoordinateMM);
-    } else {
-      Serial.print("[TRACK] moveToPointMM=");
-      Serial.print(shortestDistanceToGantry);
-      Serial.print(" gantryTargetX=");
-      Serial.println(coordinates[targetIndex].x);
-      driveForwardsAndUpdateCoordinates(shortestDistanceToGantry, &coordinates, coordinates[targetIndex].x);
-      setExtruderPositionTicks(fixedExtrudeTicks, pwrExt);
-    }
+//     if (shortestDistanceToGantry > cameraFOVHeightMM) {
+//       Serial.print("[TRACK] strideForwardMM=");
+//       Serial.println(cameraFOVHeightMM);
+//       driveForwardsAndUpdateCoordinates(cameraFOVHeightMM, &coordinates, invalidTrackingCoordinateMM);
+//     } else {
+//       Serial.print("[TRACK] moveToPointMM=");
+//       Serial.print(shortestDistanceToGantry);
+//       Serial.print(" gantryTargetX=");
+//       Serial.println(coordinates[targetIndex].x);
+//       driveForwardsAndUpdateCoordinates(shortestDistanceToGantry, &coordinates, coordinates[targetIndex].x);
+//       setExtruderPositionTicks(fixedExtrudeTicks, pwrExt);
+//     }
 
-    for (int j = (int)coordinates.size() - 1; j >= 0; j--) {
-      if (coordinates[j].y <= gantryY_MM + filledPointToleranceMM) {
-        coordinates.erase(coordinates.begin() + j);
-      }
-    }
+//     for (int j = (int)coordinates.size() - 1; j >= 0; j--) {
+//       if (coordinates[j].y <= gantryY_MM + filledPointToleranceMM) {
+//         coordinates.erase(coordinates.begin() + j);
+//       }
+//     }
 
-    if (!detectedCrackThisLoop && coordinates.empty()) {
-      stopAllDriveMotors();
-      stopGantry();
-      Serial.println("[TRACK] done; all queued points filled");
-      return true;
-    }
-  }
+//     if (!detectedCrackThisLoop && coordinates.empty()) {
+//       stopAllDriveMotors();
+//       stopGantry();
+//       Serial.println("[TRACK] done; all queued points filled");
+//       return true;
+//     }
+//   }
 
-  stopAllDriveMotors();
-  stopGantry();
-  Serial.println("[TRACK] stopped after max loops");
-  return false;
-}
+//   stopAllDriveMotors();
+//   stopGantry();
+//   Serial.println("[TRACK] stopped after max loops");
+//   return false;
+// }
 
-// This function drives forwards a certain distance and then updates the coordinates so that the y value reduces by the amount the robot moved forwards
-// if gantry target has a value then it will also move the gantry to its target position
-// the gantryTarget variable will be given as a robot relative x value in MM
-// use the runToEncoderTargetsWithGantry() function
-void driveForwardsAndUpdateCoordinates(float distance, std::vector<point>* coordinates, float gantryTarget) {
-  long gantryTargetTicks = 0;
-  bool movingGantry = false;
-  if (gantryTarget >= minGantryX_MM && gantryTarget <= maxGantryX_MM) {
-    long absoluteGantryTargetTicks = lround((gantryTarget - minGantryX_MM) * gantryTicksPerMM);
-    gantryTargetTicks = absoluteGantryTargetTicks - readEncoderGantry();
-    movingGantry = true;
-  }
+// // This function drives forwards a certain distance and then updates the coordinates so that the y value reduces by the amount the robot moved forwards
+// // if gantry target has a value then it will also move the gantry to its target position
+// // the gantryTarget variable will be given as a robot relative x value in MM
+// // use the runToEncoderTargetsWithGantry() function
+// void driveForwardsAndUpdateCoordinates(float distance, std::vector<point>* coordinates, float gantryTarget) {
+//   long gantryTargetTicks = 0;
+//   bool movingGantry = false;
+//   if (gantryTarget >= minGantryX_MM && gantryTarget <= maxGantryX_MM) {
+//     long absoluteGantryTargetTicks = lround((gantryTarget - minGantryX_MM) * gantryTicksPerMM);
+//     gantryTargetTicks = absoluteGantryTargetTicks - readEncoderGantry();
+//     movingGantry = true;
+//   }
 
-  long driveTargetTicks = distanceToEncoderTicks(distance);
-  Serial.print("[TRACK UPDATE] distanceMM=");
-  Serial.print(distance);
-  Serial.print(" driveTicks=");
-  Serial.print(driveTargetTicks);
-  Serial.print(" movingGantry=");
-  Serial.print(movingGantry);
-  if (movingGantry) {
-    Serial.print(" gantryTargetX=");
-    Serial.print(gantryTarget);
-    Serial.print(" gantryTicks=");
-    Serial.print(gantryTargetTicks);
-  }
-  Serial.println();
+//   long driveTargetTicks = distanceToEncoderTicks(distance);
+//   Serial.print("[TRACK UPDATE] distanceMM=");
+//   Serial.print(distance);
+//   Serial.print(" driveTicks=");
+//   Serial.print(driveTargetTicks);
+//   Serial.print(" movingGantry=");
+//   Serial.print(movingGantry);
+//   if (movingGantry) {
+//     Serial.print(" gantryTargetX=");
+//     Serial.print(gantryTarget);
+//     Serial.print(" gantryTicks=");
+//     Serial.print(gantryTargetTicks);
+//   }
+//   Serial.println();
 
-  if (!runToEncoderTargetsWithGantry(driveTargetTicks, driveTargetTicks, gantryTargetTicks, movementSpeed)) {
-    Serial.println("[TRACK UPDATE] move failed; coordinates not updated");
-    return;
-  }
+//   if (!runToEncoderTargetsWithGantry(driveTargetTicks, driveTargetTicks, gantryTargetTicks, movementSpeed)) {
+//     Serial.println("[TRACK UPDATE] move failed; coordinates not updated");
+//     return;
+//   }
 
-  for (int i = 0; i < (int)coordinates->size(); i++) {
-    coordinates->at(i).y -= distance;
-  }
-  Serial.print("[TRACK UPDATE] coordinates advanced; queued=");
-  Serial.println((int)coordinates->size());
-}
+//   for (int i = 0; i < (int)coordinates->size(); i++) {
+//     coordinates->at(i).y -= distance;
+//   }
+//   Serial.print("[TRACK UPDATE] coordinates advanced; queued=");
+//   Serial.println((int)coordinates->size());
+// }
