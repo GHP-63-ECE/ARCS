@@ -48,8 +48,8 @@ const int Gantry2 = 26;
 
 // Extruder Motor Pins
 const int PWM_EXT = 14;
-const int EXT1 = 12;
-const int EXT2 = 4;
+const int EXT1 = 4;
+const int EXT2 = 12;
 
 // Encoder Connections
 const int ENCAFL = 34; // Encoder A pin for Front Left Motor
@@ -638,7 +638,7 @@ void setGantryPower(int power) {
     gantryDirectionBackward();
   } else {
     gantryDirectionForward();
-    
+  
   }
   if (power > 255) {
     power = 255;
@@ -658,6 +658,8 @@ bool setGantryPosition(int targetPosMM, int maxSpeed) {
   targetPos = constrain(targetPos, minGantryPosition, maxGantryPosition);
   long startLeft = readEncoderGantry();
 
+  pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
+
   while (true) {
     long current = readEncoderGantry();
     long error = targetPos - current;
@@ -666,20 +668,33 @@ bool setGantryPosition(int targetPosMM, int maxSpeed) {
 
     // Serial.print("Gantry Error: ");
     // Serial.print(error);
+    Serial.print(" Error: ");
+    Serial.print(error);
+    Serial.print(", Target: ");
+    Serial.print(targetPos);   
+    Serial.print(", Current: ");
+    Serial.print(current);
+    // Serial.println();
     if (atTarget) {
       stopGantry();
       return true;
     }
-    
+  
     pidControllerGantry.UpdateError(error);
     double output = pidControllerGantry.TotalError();
-    // Serial.print(" Gantry PID Output: ");
-    // Serial.print(output);
+    Serial.print(" Gantry PID Output: ");
+    Serial.print(output);
+    Serial.print(", P: ");
+    Serial.print(pidControllerGantry.p_error);
+    Serial.print(", I: ");
+    Serial.print(pidControllerGantry.i_error);
+    Serial.print(", D: ");
+    Serial.print(pidControllerGantry.d_error);
 
     int speed = atTarget ? 0 : pidOutputToSpeed(output, error, maxSpeed);
     setGantryPower(speed);
-    // Serial.print(" Gantry Speed: ");
-    // Serial.println(speed);
+    Serial.print(" Gantry Speed: ");
+    Serial.println(speed);
     delay(movementLoopDelayMs);
   }
 }
@@ -690,7 +705,7 @@ bool isAtTargetPositionGantry() {
 
 bool homeGantryPosition() {
   int previousGantryPos = readEncoderGantry();
-  setGantryPower(-50); // Move gantry backward slowly
+  setGantryPower(100); // Move gantry backward slowly
   delay(1000);
   int currentPosition = readEncoderGantry();
   while (true) {
@@ -746,6 +761,8 @@ bool setExtruderPosition(int targetPosMM, int maxSpeed){
   targetPos = constrain(targetPos, minGantryPosition, maxGantryPosition);
   long startLeft = readEncoderExtruder();
 
+  pidControllerExt.Init(kP_ext, kI_ext, kD_ext);
+
   while (true) {
     long current = readEncoderExtruder();
     long error = targetPos - current;
@@ -754,6 +771,11 @@ bool setExtruderPosition(int targetPosMM, int maxSpeed){
 
     Serial.print("Extruder Error: ");
     Serial.print(error);
+    Serial.print(", Target: ");
+    Serial.print(targetPos);   
+    Serial.print(", Current: ");
+    Serial.print(current);
+
     if (atTarget) {
       stopGantry();
       return true;
@@ -764,8 +786,10 @@ bool setExtruderPosition(int targetPosMM, int maxSpeed){
     Serial.print(" Extruder PID Output: ");
     Serial.print(output);
 
+
+
     int speed = atTarget ? 0 : pidOutputToSpeed(output, error, maxSpeed);
-    setGantryPower(speed);
+    setExtruderPower(speed);
     Serial.print(" Extruder Speed: ");
     Serial.println(speed);
     delay(movementLoopDelayMs);
@@ -790,9 +814,9 @@ void updateEncoderRight(){
 
 void updateEncoderGantry(){
   if (digitalRead(ENCGANA) > digitalRead(ENCGANB))
-    encoderValueGantry++;
-  else
     encoderValueGantry--;
+  else
+    encoderValueGantry++;
 }
 
 void updateEncoderExtruder(){
@@ -957,7 +981,7 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(ENCGANA), updateEncoderGantry, RISING);
 
-  attachInterrupt(digitalPinToInterrupt(ENCEXTA), updateEncoderGantry, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENCEXTA), updateEncoderExtruder, RISING);
   
   servo.attach(servoPin);
   servo.writeMicroseconds(1100); // send "stop" signal to ESC. Also necessary to arm the ESC.
@@ -1008,10 +1032,11 @@ bool killEverything = false;
 bool joystickConnected = true;
 
 void loop() {
-
-  homeGantryPosition();
+  // Serial.println(readEncoderExtruder());
+  // setExtruderPower(100);
+  setExtruderPosition(100, 255);
   while(true){}
-  // homeGantryPosition();
+  // while(true){}
   // setGantryPower(100);
   // updateVision();
   // // // updateVisionArray();
@@ -1049,7 +1074,7 @@ void loop() {
 
   // MARK: Joystick Code
   
-  /*
+  
   int leftVal=map(joystickData.vy1, 0, 4095, -255, 255);
   int rightVal=map(joystickData.vy3, 0, 4095, -255, 255);
   int gantryVal=map(joystickData.vx2, 0, 4095, -255, 255);
@@ -1110,21 +1135,21 @@ void loop() {
     setGantryPower(gantryVal);
     setExtruderPower(extVal);
   }
-    */
+    
   
-  // Serial.print(" EDF Increment: ");
-  // Serial.print(edfIncrement);
-  // Serial.print(" EDF Power: ");
-  // Serial.print(edfPower);
-  // Serial.print(" Left Val: ");
-  // Serial.print(leftVal);
-  // Serial.print(" Right Val: ");
-  // Serial.print(rightVal);
-  // Serial.print(" Gantry Val: ");
-  // Serial.print(gantryVal);
-  // Serial.print(" Kill Everything: ");
-  // Serial.print(killEverything);
-  // Serial.println();
+  Serial.print(" EDF Increment: ");
+  Serial.print(edfIncrement);
+  Serial.print(" EDF Power: ");
+  Serial.print(edfPower);
+  Serial.print(" Left Val: ");
+  Serial.print(leftVal);
+  Serial.print(" Right Val: ");
+  Serial.print(rightVal);
+  Serial.print(" Gantry Val: ");
+  Serial.print(gantryVal);
+  Serial.print(" Kill Everything: ");
+  Serial.print(killEverything);
+  Serial.println();
   
   // Serial.println(encoderValueLeft + " hello " + encoderValueRight); // LINE OF DOOOOOOOOOOOOOOOOOOOMMMMMMMMMMM ONLY UNCOMMENT IN CASE OF EMERGENCY
 
