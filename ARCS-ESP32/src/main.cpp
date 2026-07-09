@@ -4,6 +4,7 @@
 #include <PID.h>
 #include <esp_now.h>
 #include <WiFi.h>
+#include <vector>
 
 // MARK: Function prototypes 
 // because c++ is a liar
@@ -153,6 +154,12 @@ bool button3;
 bool button4;
 bool button5;
 } struct_message;
+
+// point :)
+typedef struct point {
+  float x;
+  float y;
+} point;
 
 // MARK: ESP-NOW Comms
 
@@ -366,9 +373,9 @@ void turnDegrees(float degrees, int speed) {
 
 // Origin Coordinates
 float cameraXOrigin = 0.5; // Normalized X coordinate of the camera's origin 
-float cameraYOrigin = 0.5;//0.5; // Normalized Y coordinate of the camera's origin
+float cameraYOrigin = 0.5; // -2; // Normalized Y coordinate of the camera's origin
 float cameraToRobotCenterMM = 87; // TODO
-float gantryDistanceToRobotCenterMM = 94; // TODO
+float gantryY_MM = -94; // TODO
 float minGantryX_MM = -(185.7 / 2);
 
 float getGantryX() {
@@ -1199,3 +1206,153 @@ void loop() {
   // Serial.print(", ");
   // Serial.println(String(digitalRead(ENCBFL)));
 }
+
+// TODO
+// MARK: New Tracking Code
+
+bool runToEncoderTargetsWithGantry(long leftTargetTicks, long rightTargetTicks, long gantryTargetTicks, int speed) {
+  int maxSpeed = constrain(abs(speed), 0, 255);
+  if (maxSpeed == 0 || (leftTargetTicks == 0 && rightTargetTicks == 0 && gantryTargetTicks == 0)) {
+    stopAllDriveMotors();
+    stopGantry();
+    return true;
+  }
+
+  long startLeft = readEncoderLeft();
+  long startRight = readEncoderRight();
+  long startGantry = readEncoderGantry();
+  targetPositionLeft = startLeft + leftTargetTicks;
+  targetPositionRight = startRight + rightTargetTicks;
+  targetPositionGantry = startGantry + gantryTargetTicks;
+
+  leftDrivePID.Init(kP, kI, kD);
+  rightDrivePID.Init(kP, kI, kD);
+  pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
+
+  // float longestDistanceMm = (max(abs(leftTargetTicks), abs(rightTargetTicks)) / (float)ticksPerRotation) * wheelCircumference;
+  // unsigned long timeoutMs = (unsigned long)((longestDistanceMm / mmPerSecond(maxSpeed)) * 3000.0) + 1000;
+  // unsigned long startTime = millis();
+
+  while (true) {
+    long currentLeft = readEncoderLeft();
+    long currentRight = readEncoderRight();
+    long currentGantry = readEncoderGantry();
+    long leftError = targetPositionLeft - currentLeft;
+    long rightError = targetPositionRight - currentRight;
+    long gantryError = targetPositionGantry - currentGantry;
+
+    bool leftAtTarget = abs(leftError) <= encoderToleranceTicks;
+    bool rightAtTarget = abs(rightError) <= encoderToleranceTicks;
+    bool gantryAtTarget = abs(gantryError) <= encoderToleranceTicks;
+
+    // Serial.print("Left Error: ");
+    // Serial.print(leftError);
+    // Serial.print(", Right Error: ");
+    // Serial.print(rightError);
+    // Serial.print(", Left Target: ");
+    // Serial.print(targetPositionLeft);   
+    // Serial.print(", Right Target: ");
+    // Serial.print(targetPositionRight);
+    // Serial.print(", Left Current: ");
+    // Serial.print(currentLeft);
+    // Serial.print(", Right Current: ");
+    // Serial.print(currentRight);
+
+    if (leftAtTarget && rightAtTarget && gantryAtTarget) {
+      stopAllDriveMotors();
+      stopGantry();
+      return true;
+    }
+
+    // if (millis() - startTime > timeoutMs) {
+    //   stopAllDriveMotors();
+    //   Serial.println("Encoder movement timed out");
+    //   return false;
+    // }
+    
+    leftDrivePID.UpdateError(leftError);
+    rightDrivePID.UpdateError(rightError);
+    pidControllerGantry.UpdateError(gantryError);
+    // Serial.print(", Left P: ");
+    // Serial.print(leftDrivePID.p_error);
+    // Serial.print(", Left I: ");
+    // Serial.print(leftDrivePID.i_error);
+    // Serial.print(", Left D: ");
+    // Serial.print(leftDrivePID.d_error);
+    // Serial.print(", Right P: ");
+    // Serial.print(rightDrivePID.p_error);
+    // Serial.print(", Right I: ");
+    // Serial.print(rightDrivePID.i_error);
+    // Serial.print(", Right D: ");
+    // Serial.println(rightDrivePID.d_error);
+    double leftOutput = leftDrivePID.TotalError();
+    double rightOutput = rightDrivePID.TotalError();
+    double gantryOutput = pidControllerGantry.TotalError();
+
+    // Serial.print(", Left Output: ");
+    // Serial.print(leftOutput);
+    // Serial.print(", Right Output: ");
+    // Serial.println(rightOutput);
+
+    int leftSpeed = leftAtTarget ? 0 : pidOutputToSpeed(leftOutput, leftError, maxSpeed);
+    int rightSpeed = rightAtTarget ? 0 : pidOutputToSpeed(rightOutput, rightError, maxSpeed);
+    int gantrySpeed = gantryAtTarget ? 0 : pidOutputToSpeed(gantryOutput, gantryError, maxSpeed);
+
+    if (leftTargetTicks == -rightTargetTicks) {
+      // If turning, ensure both motors are moving at the same speed
+      setSpeed(leftSpeed, -leftSpeed);
+      // Serial.print("Output Speed:");
+      // Serial.println(leftSpeed);
+    } else {
+      setSpeed(leftSpeed, rightSpeed);
+    }
+    setGantryPower(gantrySpeed);
+    delay(movementLoopDelayMs);
+  }
+}
+
+// TODO
+std::array<point, 5> getCurrentOrderedCoordinateArray() {
+  // Some logic here
+  // It should order it in the order y4, y3, cy, y2, y1
+  // AKA x4, x3, cx, x2, x1
+  // It should take the values directly from the bluetooth, i think the updateVisionArray does this but it shouldn't use that function
+  // the bluetooth gives normalized coordinates relative to the camera FOV with 0,0 being the top left and 1,1 being the bottom right
+  // if the normalized coordinate says -1 then it isn't detecting a crack
+  // you have to convert the coordinates to robot relative and in MM, there is already logic that does this like float normalizedToRobotRelativeX(float x) and functions around that area
+  // 
+  return {{{0,0}, {0,0}, {0,0}, {0,0}, {0,0}}};
+}
+
+// TODO this function will drive the robot forwards once the robot is already aligned with the crack 
+// it will stop once the crack is no longer detected AND the robot has fully filled the last detected crack
+// basically 
+bool driveForwardsAndTrackCrack() {
+  std::vector<point> coordinates;
+  int numberOfLoops = 5;
+  for (int i = 0; i < numberOfLoops; i++) {
+
+    std::array<point, 5> currentPoints = {getCurrentOrderedCoordinateArray()};
+
+    // Append the entire array to the vector
+    coordinates.insert(coordinates.end(), std::begin(currentPoints), std::end(currentPoints));
+
+    for (int j = 0; j < coordinates.size(); j++) {
+      
+    }
+  }
+}
+
+// TODO - this function drives forwards a certain distance and then updates the coordinates so that the y value reduces by the amount the robot moved forwards
+// if gantry target has a value then it will also move the gantry to its target position
+// the gantryTarget variable will be given as a robot relative x value in MM
+// use the runToEncoderTargetsWithGantry() function
+// void driveForwardsAndUpdateCoordinates(float distance, std::vector<point>* coordinates, float gantryTarget) {
+//   driveDistance(distance, movementSpeed); // probably don't use this code
+//   int n = coordinates.size();
+//   for (int i = 0; i < n; i++)
+// }
+
+
+
+ 
