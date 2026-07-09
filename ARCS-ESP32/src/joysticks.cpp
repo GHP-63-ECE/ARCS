@@ -3,7 +3,11 @@
 #include <esp_now.h>
 
 // Replace with the receiver's MAC address
-uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4d, 0x99, 0x04}; //  70:4b:ca:4d:99:04
+
+// ARCS
+// uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4d, 0x99, 0x04}; //  70:4b:ca:4d:99:04
+// ICARUS
+uint8_t broadcastAddress[] = {0x70, 0x4b, 0xca, 0x4e, 0x03, 0x98}; // 70:4b:ca:4e:03:98
 
 const int vy1Pin = 33;
 const int vy2Pin = 32;
