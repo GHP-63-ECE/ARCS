@@ -4,6 +4,7 @@
 #include <PID.h>
 #include <esp_now.h>
 #include <WiFi.h>
+#include <array>
 #include <vector>
 
 // MARK: Function prototypes 
@@ -160,6 +161,11 @@ typedef struct point {
   float x;
   float y;
 } point;
+
+bool runToEncoderTargetsWithGantry(long leftTargetTicks, long rightTargetTicks, long gantryTargetTicks, int speed);
+std::array<point, 5> getCurrentOrderedCoordinateArray();
+bool driveForwardsAndTrackCrack();
+void driveForwardsAndUpdateCoordinates(float distance, std::vector<point>* coordinates, float gantryTarget);
 
 // MARK: ESP-NOW Comms
 
@@ -377,12 +383,13 @@ float cameraYOrigin = 0.5; // -2; // Normalized Y coordinate of the camera's ori
 float cameraToRobotCenterMM = 87; // TODO
 float gantryY_MM = -94; // TODO
 float minGantryX_MM = -(185.7 / 2);
+float maxGantryX_MM = maxGantryPosition / gantryTicksPerMM + minGantryX_MM;
 
 float getGantryX() {
   noInterrupts();
   long gantryTicks = encoderValueGantry;
   interrupts();
-  return gantryTicks*gantryTicksPerMM + minGantryX_MM;
+  return gantryTicks/gantryTicksPerMM + minGantryX_MM;
 }
 
 float normalizedToRobotRelativeX(float x) {
@@ -1207,8 +1214,9 @@ void loop() {
   // Serial.println(String(digitalRead(ENCBFL)));
 }
 
-// TODO
 // MARK: New Tracking Code
+
+const float invalidTrackingCoordinateMM = -1000000.0;
 
 bool runToEncoderTargetsWithGantry(long leftTargetTicks, long rightTargetTicks, long gantryTargetTicks, int speed) {
   int maxSpeed = constrain(abs(speed), 0, 255);
@@ -1225,13 +1233,24 @@ bool runToEncoderTargetsWithGantry(long leftTargetTicks, long rightTargetTicks, 
   targetPositionRight = startRight + rightTargetTicks;
   targetPositionGantry = startGantry + gantryTargetTicks;
 
+  Serial.print("[TRACK MOVE] leftTicks=");
+  Serial.print(leftTargetTicks);
+  Serial.print(" rightTicks=");
+  Serial.print(rightTargetTicks);
+  Serial.print(" gantryTicks=");
+  Serial.print(gantryTargetTicks);
+  Serial.print(" maxSpeed=");
+  Serial.println(maxSpeed);
+
   leftDrivePID.Init(kP, kI, kD);
   rightDrivePID.Init(kP, kI, kD);
   pidControllerGantry.Init(kP_gantry, kI_gantry, kD_gantry);
 
-  // float longestDistanceMm = (max(abs(leftTargetTicks), abs(rightTargetTicks)) / (float)ticksPerRotation) * wheelCircumference;
-  // unsigned long timeoutMs = (unsigned long)((longestDistanceMm / mmPerSecond(maxSpeed)) * 3000.0) + 1000;
-  // unsigned long startTime = millis();
+  float longestDriveDistanceMm = (max(abs(leftTargetTicks), abs(rightTargetTicks)) / (float)ticksPerRotation) * wheelCircumference;
+  float gantryDistanceMm = abs(gantryTargetTicks) / gantryTicksPerMM;
+  float longestDistanceMm = max(longestDriveDistanceMm, gantryDistanceMm);
+  unsigned long timeoutMs = (unsigned long)((longestDistanceMm / mmPerSecond(maxSpeed)) * 3000.0) + 1000;
+  unsigned long startTime = millis();
 
   while (true) {
     long currentLeft = readEncoderLeft();
@@ -1261,15 +1280,27 @@ bool runToEncoderTargetsWithGantry(long leftTargetTicks, long rightTargetTicks, 
     if (leftAtTarget && rightAtTarget && gantryAtTarget) {
       stopAllDriveMotors();
       stopGantry();
+      Serial.print("[TRACK MOVE DONE] left=");
+      Serial.print(currentLeft);
+      Serial.print(" right=");
+      Serial.print(currentRight);
+      Serial.print(" gantry=");
+      Serial.println(currentGantry);
       return true;
     }
 
-    // if (millis() - startTime > timeoutMs) {
-    //   stopAllDriveMotors();
-    //   Serial.println("Encoder movement timed out");
-    //   return false;
-    // }
-    
+    if (millis() - startTime > timeoutMs) {
+      stopAllDriveMotors();
+      stopGantry();
+      Serial.print("[TRACK MOVE TIMEOUT] leftError=");
+      Serial.print(leftError);
+      Serial.print(" rightError=");
+      Serial.print(rightError);
+      Serial.print(" gantryError=");
+      Serial.println(gantryError);
+      return false;
+    }
+
     leftDrivePID.UpdateError(leftError);
     rightDrivePID.UpdateError(rightError);
     pidControllerGantry.UpdateError(gantryError);
@@ -1298,6 +1329,19 @@ bool runToEncoderTargetsWithGantry(long leftTargetTicks, long rightTargetTicks, 
     int rightSpeed = rightAtTarget ? 0 : pidOutputToSpeed(rightOutput, rightError, maxSpeed);
     int gantrySpeed = gantryAtTarget ? 0 : pidOutputToSpeed(gantryOutput, gantryError, maxSpeed);
 
+    // Serial.print("[TRACK MOVE LOOP] leftError=");
+    // Serial.print(leftError);
+    // Serial.print(" rightError=");
+    // Serial.print(rightError);
+    // Serial.print(" gantryError=");
+    // Serial.print(gantryError);
+    // Serial.print(" leftSpeed=");
+    // Serial.print(leftSpeed);
+    // Serial.print(" rightSpeed=");
+    // Serial.print(rightSpeed);
+    // Serial.print(" gantrySpeed=");
+    // Serial.println(gantrySpeed);
+
     if (leftTargetTicks == -rightTargetTicks) {
       // If turning, ensure both motors are moving at the same speed
       setSpeed(leftSpeed, -leftSpeed);
@@ -1311,48 +1355,258 @@ bool runToEncoderTargetsWithGantry(long leftTargetTicks, long rightTargetTicks, 
   }
 }
 
-// TODO
+float parseVisionCoordinate(String rawData, String key) {
+  int keyIndex = rawData.indexOf(key);
+  if (keyIndex < 0) {
+    return -1.0;
+  }
+
+  int valueStart = keyIndex + key.length();
+  while (valueStart < rawData.length()) {
+    char currentChar = rawData.charAt(valueStart);
+    if (currentChar == '-' || currentChar == '.' || (currentChar >= '0' && currentChar <= '9')) {
+      break;
+    }
+    valueStart++;
+  }
+
+  int valueEnd = valueStart;
+  if (valueEnd < rawData.length() && rawData.charAt(valueEnd) == '-') {
+    valueEnd++;
+  }
+  while (valueEnd < rawData.length()) {
+    char currentChar = rawData.charAt(valueEnd);
+    if (currentChar != '.' && (currentChar < '0' || currentChar > '9')) {
+      break;
+    }
+    valueEnd++;
+  }
+
+  if (valueStart >= rawData.length() || valueEnd <= valueStart) {
+    return -1.0;
+  }
+  return rawData.substring(valueStart, valueEnd).toFloat();
+}
+
+point normalizedToRobotRelativePoint(float x, float y) {
+  if (x < 0.0 || y < 0.0) {
+    return {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM};
+  }
+
+  return {
+    normalizedToRobotRelativeX(x),
+    normalizedToRobotRelativeY(y) + cameraToRobotCenterMM
+  };
+}
+
+bool isDetectedPoint(point coordinate) {
+  return coordinate.x > invalidTrackingCoordinateMM / 2.0 && coordinate.y > invalidTrackingCoordinateMM / 2.0;
+}
+
+bool isDuplicateTrackedPoint(std::vector<point>* coordinates, point candidate) {
+  const float duplicateToleranceMM = 5.0;
+  for (int i = 0; i < (int)coordinates->size(); i++) {
+    point existing = coordinates->at(i);
+    if (!isDetectedPoint(existing)) {
+      continue;
+    }
+    float xDifference = existing.x > candidate.x ? existing.x - candidate.x : candidate.x - existing.x;
+    float yDifference = existing.y > candidate.y ? existing.y - candidate.y : candidate.y - existing.y;
+    if (xDifference <= duplicateToleranceMM && yDifference <= duplicateToleranceMM) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::array<point, 5> getCurrentOrderedCoordinateArray() {
-  // Some logic here
   // It should order it in the order y4, y3, cy, y2, y1
   // AKA x4, x3, cx, x2, x1
   // It should take the values directly from the bluetooth, i think the updateVisionArray does this but it shouldn't use that function
   // the bluetooth gives normalized coordinates relative to the camera FOV with 0,0 being the top left and 1,1 being the bottom right
   // if the normalized coordinate says -1 then it isn't detecting a crack
   // you have to convert the coordinates to robot relative and in MM, there is already logic that does this like float normalizedToRobotRelativeX(float x) and functions around that area
-  // 
-  return {{{0,0}, {0,0}, {0,0}, {0,0}, {0,0}}};
+  std::array<point, 5> points = {{{invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}, {invalidTrackingCoordinateMM, invalidTrackingCoordinateMM}}};
+  if (BS.available() <= 0) {
+    return points;
+  }
+
+  String rawData = BS.readStringUntil('\n');
+  rawData.trim();
+  if (rawData.length() == 0) {
+    return points;
+  }
+
+  points[0] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x4"), parseVisionCoordinate(rawData, "y4"));
+  points[1] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x3"), parseVisionCoordinate(rawData, "y3"));
+  points[2] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "cx"), parseVisionCoordinate(rawData, "cy"));
+  points[3] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x2"), parseVisionCoordinate(rawData, "y2"));
+  points[4] = normalizedToRobotRelativePoint(parseVisionCoordinate(rawData, "x1"), parseVisionCoordinate(rawData, "y1"));
+
+  Serial.print("[TRACK VISION RAW] ");
+  Serial.println(rawData);
+  // for (int i = 0; i < (int)points.size(); i++) {
+  //   Serial.print("[TRACK VISION POINT] index=");
+  //   Serial.print(i);
+  //   Serial.print(" x=");
+  //   Serial.print(points[i].x);
+  //   Serial.print(" y=");
+  //   Serial.println(points[i].y);
+  // }
+  return points;
 }
 
-// TODO this function will drive the robot forwards once the robot is already aligned with the crack 
+// This function will drive the robot forwards once the robot is already aligned with the crack
 // it will stop once the crack is no longer detected AND the robot has fully filled the last detected crack
-// basically 
 bool driveForwardsAndTrackCrack() {
   std::vector<point> coordinates;
-  int numberOfLoops = 5;
+  const int numberOfLoops = 40;
+  const float filledPointToleranceMM = 8.0;
+  bool hasSeenCrack = false;
+
+  Serial.println("[TRACK] start");
+
   for (int i = 0; i < numberOfLoops; i++) {
+    std::array<point, 5> currentPoints = getCurrentOrderedCoordinateArray();
+    bool detectedCrackThisLoop = false;
+    int newPointsThisLoop = 0;
 
-    std::array<point, 5> currentPoints = {getCurrentOrderedCoordinateArray()};
+    for (int j = 0; j < (int)currentPoints.size(); j++) {
+      point currentPoint = currentPoints[j];
+      if (!isDetectedPoint(currentPoint)) {
+        continue;
+      }
+      detectedCrackThisLoop = true;
+      hasSeenCrack = true;
+      if (!isDuplicateTrackedPoint(&coordinates, currentPoint)) {
+        coordinates.push_back(currentPoint);
+        newPointsThisLoop++;
+      }
+    }
 
-    // Append the entire array to the vector
-    coordinates.insert(coordinates.end(), std::begin(currentPoints), std::end(currentPoints));
+    Serial.print("[TRACK] loop=");
+    Serial.print(i);
+    Serial.print(" detected=");
+    Serial.print(detectedCrackThisLoop);
+    Serial.print(" newPoints=");
+    Serial.print(newPointsThisLoop);
+    Serial.print(" queued=");
+    Serial.println((int)coordinates.size());
+    // for (int j = 0; j < (int)coordinates.size(); j++) {
+    //   Serial.print("[TRACK QUEUE] index=");
+    //   Serial.print(j);
+    //   Serial.print(" x=");
+    //   Serial.print(coordinates[j].x);
+    //   Serial.print(" y=");
+    //   Serial.println(coordinates[j].y);
+    // }
 
-    for (int j = 0; j < coordinates.size(); j++) {
-      
+    int targetIndex = -1;
+    float shortestDistanceToGantry = 1000000.0;
+    for (int j = 0; j < (int)coordinates.size(); j++) {
+      float distanceToGantry = coordinates[j].y - gantryY_MM;
+      if (distanceToGantry >= -filledPointToleranceMM && distanceToGantry < shortestDistanceToGantry) {
+        shortestDistanceToGantry = max(0.0f, distanceToGantry);
+        targetIndex = j;
+      }
+    }
+
+    if (targetIndex < 0) {
+      for (int j = (int)coordinates.size() - 1; j >= 0; j--) {
+        if (coordinates[j].y <= gantryY_MM + filledPointToleranceMM) {
+          coordinates.erase(coordinates.begin() + j);
+        }
+      }
+      if (!detectedCrackThisLoop && coordinates.empty()) {
+        stopAllDriveMotors();
+        stopGantry();
+        Serial.print("[TRACK] done; hasSeenCrack=");
+        Serial.println(hasSeenCrack);
+        return hasSeenCrack;
+      }
+      Serial.println("[TRACK] no usable target yet");
+      delay(20);
+      continue;
+    }
+
+    Serial.print("[TRACK] targetIndex=");
+    Serial.print(targetIndex);
+    Serial.print(" targetX=");
+    Serial.print(coordinates[targetIndex].x);
+    Serial.print(" targetY=");
+    Serial.print(coordinates[targetIndex].y);
+    Serial.print(" distanceToGantry=");
+    Serial.println(shortestDistanceToGantry);
+
+    if (shortestDistanceToGantry > cameraFOVHeightMM) {
+      Serial.print("[TRACK] strideForwardMM=");
+      Serial.println(cameraFOVHeightMM);
+      driveForwardsAndUpdateCoordinates(cameraFOVHeightMM, &coordinates, invalidTrackingCoordinateMM);
+    } else {
+      Serial.print("[TRACK] moveToPointMM=");
+      Serial.print(shortestDistanceToGantry);
+      Serial.print(" gantryTargetX=");
+      Serial.println(coordinates[targetIndex].x);
+      driveForwardsAndUpdateCoordinates(shortestDistanceToGantry, &coordinates, coordinates[targetIndex].x);
+    }
+
+    for (int j = (int)coordinates.size() - 1; j >= 0; j--) {
+      if (coordinates[j].y <= gantryY_MM + filledPointToleranceMM) {
+        coordinates.erase(coordinates.begin() + j);
+      }
+    }
+
+    if (!detectedCrackThisLoop && coordinates.empty()) {
+      stopAllDriveMotors();
+      stopGantry();
+      Serial.println("[TRACK] done; all queued points filled");
+      return true;
     }
   }
+
+  stopAllDriveMotors();
+  stopGantry();
+  Serial.println("[TRACK] stopped after max loops");
+  return false;
 }
 
-// TODO - this function drives forwards a certain distance and then updates the coordinates so that the y value reduces by the amount the robot moved forwards
+// This function drives forwards a certain distance and then updates the coordinates so that the y value reduces by the amount the robot moved forwards
 // if gantry target has a value then it will also move the gantry to its target position
 // the gantryTarget variable will be given as a robot relative x value in MM
 // use the runToEncoderTargetsWithGantry() function
-// void driveForwardsAndUpdateCoordinates(float distance, std::vector<point>* coordinates, float gantryTarget) {
-//   driveDistance(distance, movementSpeed); // probably don't use this code
-//   int n = coordinates.size();
-//   for (int i = 0; i < n; i++)
-// }
+void driveForwardsAndUpdateCoordinates(float distance, std::vector<point>* coordinates, float gantryTarget) {
+  // float maxGantryX_MM = -minGantryX_MM;
+  long gantryTargetTicks = 0;
+  bool movingGantry = false;
+  if (gantryTarget >= minGantryX_MM && gantryTarget <= maxGantryX_MM) {
+    long absoluteGantryTargetTicks = lround((gantryTarget - minGantryX_MM) * gantryTicksPerMM);
+    gantryTargetTicks = absoluteGantryTargetTicks - readEncoderGantry();
+    movingGantry = true;
+  }
 
+  long driveTargetTicks = distanceToEncoderTicks(distance);
+  Serial.print("[TRACK UPDATE] distanceMM=");
+  Serial.print(distance);
+  Serial.print(" driveTicks=");
+  Serial.print(driveTargetTicks);
+  Serial.print(" movingGantry=");
+  Serial.print(movingGantry);
+  if (movingGantry) {
+    Serial.print(" gantryTargetX=");
+    Serial.print(gantryTarget);
+    Serial.print(" gantryTicks=");
+    Serial.print(gantryTargetTicks);
+  }
+  Serial.println();
 
+  if (!runToEncoderTargetsWithGantry(driveTargetTicks, driveTargetTicks, gantryTargetTicks, movementSpeed)) {
+    Serial.println("[TRACK UPDATE] move failed; coordinates not updated");
+    return;
+  }
 
- 
+  for (int i = 0; i < (int)coordinates->size(); i++) {
+    coordinates->at(i).y -= distance;
+  }
+  Serial.print("[TRACK UPDATE] coordinates advanced; queued=");
+  Serial.println((int)coordinates->size());
+}
