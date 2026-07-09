@@ -43,7 +43,7 @@ const int ENCBFL = 15; // Encoder B pin for Front Left Motor
 const int ENCAFR = 13; // Encoder A pin for Front Right Motor
 const int ENCBFR = 25; // Encoder B pin for Front Right Motor
 
-byte servoPin = 34; // signal pin for the ESC.
+byte servoPin = 32; // signal pin for the ESC.
 
 Servo servo;
 PID pidController = PID();
@@ -483,10 +483,6 @@ bool killEverything = false;
 bool joystickConnected = true;
 
 void loop() {
-  // driveDistance(30, 255);
-  forwards();
-
-  while (true){}
 
   // MARK: Joystick Code
   
