@@ -429,7 +429,7 @@ void loop() {
       edfPower += edfIncrement;
       edfPower = constrain(edfPower, edfPowerMin, edfPowerMax);
       servo.writeMicroseconds(edfPower); // output to edfs
-    } else {
+    } else if (button4State == 0){
       setExtruderPower(extVal);
     }
 
