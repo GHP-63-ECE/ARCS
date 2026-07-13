@@ -438,6 +438,10 @@ void loop() {
     setGantryPower(gantryVal);
 
   }
+
+  if(button4State == 1){
+    stopExtruder();
+  }
     
   // Serial.println(String(encoderValueGantry));
   // Serial.println(encoderValueLeft);
